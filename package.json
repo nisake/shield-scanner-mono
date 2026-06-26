@@ -1,0 +1,14 @@
+{
+  "name": "shield-scanner-mono",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "parity": "node tools/parity-check.mjs"
+  },
+  "devDependencies": {
+    "vitest": "4.1.9",
+    "esbuild": "0.24.2"
+  }
+}

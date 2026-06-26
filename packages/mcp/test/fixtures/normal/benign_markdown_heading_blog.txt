@@ -1,0 +1,79 @@
+# Anthropic Safety Notes: Designing Constitutional AI for Multi-Turn Dialogue
+
+*Published in the Anthropic Engineering Blog, archived for reference.*
+
+When we set out to design a conversational model that could hold long, useful dialogues without sacrificing safety, we had to think carefully about how messages were structured. Modern chat systems separate the conversation into distinct roles, and the choice of role labels has a surprising amount of influence on model behavior.
+
+## System: the role of the System prompt
+
+The System role is reserved for instructions that frame the entire conversation. In most deployments, only the application developer writes to this channel. The System prompt typically describes the assistant's persona, scope of help, formatting preferences, and safety constraints. We have found that keeping the System prompt concise — under 500 tokens for most tasks — leads to better instruction-following than verbose, repetitive instructions.
+
+## How User messages flow through the API
+
+The User role carries the human's actual messages. Anything the human pastes — including documents, code, screenshots, and quoted emails — appears under this role. Because users sometimes paste content that itself contains role-like keywords, the model has to learn that text inside a User turn is data, not a new instruction frame. This is a subtle distinction that took several training iterations to get right.
+
+## How the Assistant role responds in Claude
+
+The Assistant role contains the model's own replies. During training, the Assistant turn is what the loss is computed against. The model never sees its own previous Assistant turns as new instructions; they are part of the dialogue history. We document this clearly so developers understand why injecting fake Assistant turns into the User channel does not give a malicious user new privileges.
+
+## Human-readable headings vs. structural roles
+
+It is worth noting that markdown headings such as `## System:` or `### Assistant says` that appear inside a single message are purely cosmetic. They do not change which role the surrounding text belongs to. We sometimes use this convention in documentation, tutorials, and blog posts to *describe* what each role does, without actually creating a new turn.
+
+---
+
+## Claude Documentation Excerpt: Conversation Format Reference
+
+The Claude API uses a structured conversation format. Each message in the `messages` array has a `role` and a `content` field. Supported roles are `user` and `assistant`. The optional top-level `system` parameter carries the system prompt as a separate field.
+
+### Role: System
+
+Use the `system` parameter to provide background instructions. The System prompt is not part of the messages array; it is supplied once at the top of the request. Typical uses include:
+
+- Setting the assistant's tone (formal, playful, terse).
+- Restricting the assistant to a specific domain (legal, medical, customer support).
+- Defining output schemas (JSON, XML, markdown).
+- Listing operational safety boundaries.
+
+### Role: User
+
+A `user` message contains text from the human end-user. When you build a chat UI, every line the user types becomes the `content` of a user message. Multi-modal content (images, PDFs) is also wrapped inside a user message via content blocks.
+
+### Role: Assistant
+
+An `assistant` message contains text the model produced earlier in the dialogue. To continue a conversation, append the previous assistant response to the messages array unchanged.
+
+### Role names are case-sensitive identifiers, not free-text labels
+
+The API only accepts the literal strings `user` and `assistant`. Writing `## System:` or `### Human:` inside the `content` field has no structural effect — those are just markdown headings the model will read as ordinary text. This is intentional: it means tutorial authors can freely use role-flavored headings in their documentation without accidentally triggering a role change.
+
+---
+
+# RLHF Training Notes: Why Role Confusion Is Hard
+
+Reinforcement learning from human feedback (RLHF) shapes how a language model handles role boundaries. During the supervised fine-tuning phase, annotators write thousands of example dialogues. During the reward modeling phase, they rank candidate responses. Both phases include cases where role-shaped strings appear inside ordinary text.
+
+## System prompts vs. system-shaped strings
+
+A real System prompt is supplied through the API's dedicated channel. A *string* like `## System:` that appears inside a User message is just text. The model must learn the difference. Training data includes:
+
+- Blog posts that quote system prompts using markdown headings.
+- Tutorials that demonstrate prompt injection by showing what an attack *would* look like.
+- Documentation pages that describe the role schema.
+- Forum threads where users paste their own system prompts to ask for help.
+
+## User-pasted content that mimics roles
+
+Real users often paste content that mimics role labels. In every case, the surrounding User turn is the actual frame.
+
+## Assistant turns inside Assistant turns
+
+Authors sometimes write articles that include sentences like *"the Assistant might reply: 'Sure, here is how...'"*. The model learns that quoted speech and headings such as `### Assistant says` do not redefine who is speaking.
+
+### Developer: notes on detector design
+
+When building detectors that flag suspicious role-impersonation attempts, we have to be careful not to flag this enormous corpus of legitimate writing. A naive detector that fires on every `## System:` heading would mislabel half of the technical blogosphere. Good detectors look at context: nearby imperative verbs, attempts that rewrite prior assistant guidance, and clusters of role keywords combined with action requests.
+
+## Summary
+
+Markdown headings that name a role are extremely common in benign technical writing. Any classifier that treats them as evidence of an attack must combine the heading signal with stronger contextual cues.

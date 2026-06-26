@@ -1,0 +1,964 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shield Scanner - Prompt Injection Detector</title>
+
+<!-- OGP Meta Tags -->
+<meta property="og:title" content="Shield Scanner - Prompt Injection Detector">
+<meta property="og:description" content="Detect invisible Unicode, hidden text, suspicious patterns & homoglyphs in files before they reach AI. Supports TXT, HTML, DOCX, PDF, PPTX. 100% local processing.">
+<meta property="og:image" content="https://nisake.github.io/shield-scanner/og-image.png">
+<meta property="og:url" content="https://nisake.github.io/shield-scanner/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Shield Scanner">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Shield Scanner - Prompt Injection Detector">
+<meta name="twitter:description" content="Detect invisible Unicode, hidden text, suspicious patterns & homoglyphs in files before they reach AI. 100% local processing.">
+<meta name="twitter:image" content="https://nisake.github.io/shield-scanner/og-image.png">
+
+<!-- General Meta -->
+<meta name="description" content="Browser-based prompt injection detector. Scan files for invisible Unicode, hidden elements, suspicious patterns, and homoglyphs. Supports TXT, HTML, DOCX, PDF, PPTX. All processing runs locally.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep: #0a0e17;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2236;
+  --border: #1e2d4a;
+  --border-glow: #00e5ff33;
+  --accent: #00e5ff;
+  --accent-dim: #00e5ff88;
+  --danger: #ff3860;
+  --danger-dim: #ff386044;
+  --warning: #ffb830;
+  --warning-dim: #ffb83044;
+  --safe: #23d160;
+  --safe-dim: #23d16044;
+  --info: #7c83ff;
+  --text: #e2e8f0;
+  --text-dim: #8892a8;
+  --text-muted: #4a5568;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Noto Sans JP', sans-serif;
+  --font-display: 'Orbitron', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #00e5ff05 1px, transparent 1px),
+    linear-gradient(0deg, #00e5ff05 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scan line effect */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.3;
+  animation: scanLine 4s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes scanLine {
+  0%, 100% { top: 0; opacity: 0; }
+  10% { opacity: 0.3; }
+  90% { opacity: 0.3; }
+  50% { top: 100%; }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-top: 1rem;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  text-shadow: 0 0 30px var(--accent-dim), 0 0 60px #00e5ff22;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.logo-icon {
+  font-size: 1.2em;
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+
+.subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* Language toggle */
+.lang-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.lang-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.3rem 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.lang-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #00e5ff11;
+}
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: var(--bg-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, #00e5ff08, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent);
+  box-shadow: 0 0 30px #00e5ff15, inset 0 0 30px #00e5ff08;
+}
+
+.drop-zone:hover::before, .drop-zone.dragover::before {
+  opacity: 1;
+}
+
+.drop-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  filter: drop-shadow(0 0 12px var(--accent-dim));
+}
+
+.drop-text {
+  font-size: 1rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.drop-hint {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.file-input { display: none; }
+
+/* Supported formats */
+.formats {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.format-badge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+
+.format-badge.active-format {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.format-badge.coming-soon {
+  opacity: 0.4;
+}
+
+/* Text input mode */
+.text-mode-toggle {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.text-mode-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-input-area {
+  display: none;
+  margin-top: 1rem;
+}
+
+.text-input-area.visible {
+  display: block;
+}
+
+.text-input-area textarea {
+  width: 100%;
+  min-height: 150px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 1rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.text-input-area textarea:focus {
+  border-color: var(--accent);
+}
+
+.scan-text-btn {
+  margin-top: 0.8rem;
+  background: linear-gradient(135deg, #00e5ff, #007a8a);
+  border: none;
+  color: #000;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.6rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+}
+
+.scan-text-btn:hover {
+  box-shadow: 0 0 20px var(--accent-dim);
+  transform: translateY(-1px);
+}
+
+/* Scanning animation */
+.scanning-overlay {
+  display: none;
+  text-align: center;
+  padding: 3rem;
+}
+
+.scanning-overlay.visible {
+  display: block;
+}
+
+.scan-spinner {
+  width: 60px;
+  height: 60px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.scan-status {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+/* Results */
+.results {
+  display: none;
+  margin-top: 2rem;
+}
+
+.results.visible {
+  display: block;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.result-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+}
+
+.result-status {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.status-safe { background: var(--safe-dim); color: var(--safe); border: 1px solid var(--safe); }
+.status-warning { background: var(--warning-dim); color: var(--warning); border: 1px solid var(--warning); }
+.status-danger { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger); }
+
+/* Summary cards */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.summary-count {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.summary-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.count-danger { color: var(--danger); }
+.count-warning { color: var(--warning); }
+.count-safe { color: var(--safe); }
+
+/* S18: Top Priority banner (chips for the up-to-5 most urgent findings). */
+.top-priority-banner {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.top-priority-banner.empty { display: none; }
+.top-priority-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  margin-right: 0.4rem;
+}
+.priority-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card-hover, rgba(255,255,255,0.04));
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.priority-chip .chip-score {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.chip-danger {
+  background: var(--danger-dim);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.chip-warning {
+  background: var(--warning-dim);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* Detail sections */
+.detail-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.8rem;
+  overflow: hidden;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.detail-header:hover {
+  background: var(--bg-card-hover);
+}
+
+.detail-icon { font-size: 1.1rem; }
+.detail-chevron {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.detail-section.open .detail-chevron {
+  transform: rotate(90deg);
+}
+
+.detail-title {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.detail-count {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+.detail-count.warn-count {
+  background: var(--warning-dim);
+  color: var(--warning);
+}
+
+.detail-body {
+  display: none;
+  padding: 0 1rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.detail-section.open .detail-body {
+  display: block;
+}
+
+.finding-item {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #1a2236;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.finding-item:last-child { border-bottom: none; }
+
+.finding-label {
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+
+.finding-value {
+  color: var(--text);
+  word-break: break-all;
+  background: #0d1321;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--danger);
+}
+
+.finding-value.warn-value {
+  border-left-color: var(--warning);
+}
+
+.finding-context {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+
+/* Action buttons */
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+  letter-spacing: 0.03em;
+}
+
+.btn-sanitize {
+  background: linear-gradient(135deg, var(--safe), #1a9a48);
+  border-color: var(--safe);
+  color: #000;
+}
+
+.btn-sanitize:hover {
+  box-shadow: 0 0 20px var(--safe-dim);
+  transform: translateY(-1px);
+}
+
+.btn-export {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-export:hover {
+  background: #00e5ff11;
+  box-shadow: 0 0 15px var(--border-glow);
+}
+
+.btn-reset {
+  background: transparent;
+  border-color: var(--text-muted);
+  color: var(--text-dim);
+}
+
+.btn-reset:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin-top: 3rem;
+  padding: 1.2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.disclaimer-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--warning);
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* S16: Reveal Mode markers */
+.reveal-marker {
+  display: inline-block;
+  padding: 0 0.25rem;
+  margin: 0 0.05rem;
+  background: rgba(255, 184, 48, 0.18);
+  color: var(--warning);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  font-weight: 700;
+  vertical-align: baseline;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 184, 48, 0.35);
+}
+
+.btn-reveal,
+.btn-diff {
+  background: var(--bg-card);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.btn-reveal:hover,
+.btn-diff:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.btn-reveal.active,
+.btn-diff.active {
+  background: var(--bg-card-hover);
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+/* S17: Diff view panel */
+.diff-section .detail-title { color: var(--accent); }
+.diff-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+.diff-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 0;
+}
+.diff-pane.diff-before { border-color: var(--danger-dim); }
+.diff-pane.diff-after  { border-color: rgba(35, 209, 96, 0.35); }
+.diff-pane-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-card-hover);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+.diff-pre {
+  margin: 0;
+  padding: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 22rem;
+  overflow: auto;
+}
+.diff-warn {
+  font-weight: 400;
+  font-size: 0.65rem;
+  color: var(--warning);
+  flex-basis: 100%;
+}
+.diff-trunc {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* S21: bulk-scan tabs */
+.file-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-tab {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tab:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.file-tab.active {
+  background: var(--bg-card-hover);
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.file-tab.tab-danger { color: var(--danger); border-color: var(--danger-dim); }
+.file-tab.tab-warning { color: var(--warning); border-color: rgba(255, 184, 48, 0.35); }
+.file-tab.tab-error { color: var(--warning); border-color: rgba(255, 184, 48, 0.35); }
+.file-tab.tab-safe { color: var(--safe); }
+
+.file-tab-badge {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.4rem;
+  background: var(--bg-deep);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.bulk-summary-hint {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed var(--border);
+}
+
+.bulk-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.bulk-row {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.bulk-row:hover { background: var(--bg-card-hover); }
+
+.bulk-row-badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-align: center;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.bulk-row-badge.bulk-row-danger { background: var(--danger-dim); color: var(--danger); }
+.bulk-row-badge.bulk-row-warning { background: rgba(255, 184, 48, 0.18); color: var(--warning); }
+.bulk-row-badge.bulk-row-safe { background: rgba(35, 209, 96, 0.15); color: var(--safe); }
+.bulk-row-badge.bulk-row-error { background: rgba(255, 184, 48, 0.18); color: var(--warning); }
+
+.bulk-row-name {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-row-detail {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container { padding: 1rem; }
+  .drop-zone { padding: 2rem 1rem; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .bulk-row { grid-template-columns: 4rem 1fr; }
+  .bulk-row-detail { grid-column: 1 / -1; padding-left: 4.6rem; }
+  .diff-body { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-icon">🛡️</span>
+      <span>SHIELD SCANNER</span>
+    </div>
+    <div class="subtitle" id="subtitle">Prompt Injection Detector</div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('ja')">JA</button>
+      <button class="lang-btn" onclick="setLang('en')">EN</button>
+    </div>
+  </header>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-icon">📂</div>
+    <div class="drop-text" id="dropText">ファイルをドロップ、またはクリックして選択</div>
+    <div class="drop-hint" id="dropHint">テキスト (.txt, .md, .csv, .json)・HTML (.html, .htm)・Office (.docx, .pdf, .pptx, .xlsx)・画像 (.jpg, .png, .webp, .gif, .tiff) に対応</div>
+    <input type="file" class="file-input" id="fileInput" multiple accept=".txt,.md,.markdown,.mdc,.cursorrules,.csv,.json,.html,.htm,.xml,.svg,.docx,.pdf,.pptx,.xlsx,.zip,.jpg,.jpeg,.png,.webp,.gif,.tiff,.tif,image/jpeg,image/png,image/webp,image/gif,image/tiff,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip">
+  </div>
+
+  <div class="formats">
+    <span class="format-badge active-format">.txt</span>
+    <span class="format-badge active-format">.md</span>
+    <span class="format-badge active-format">.html</span>
+    <span class="format-badge active-format">.csv</span>
+    <span class="format-badge active-format">.json</span>
+    <span class="format-badge active-format">.docx</span>
+    <span class="format-badge active-format">.pdf</span>
+    <span class="format-badge active-format">.pptx</span>
+    <span class="format-badge active-format">.xlsx</span>
+    <span class="format-badge active-format">.zip</span>
+  </div>
+
+  <!-- Text input mode -->
+  <div class="text-mode-toggle">
+    <button class="text-mode-btn" id="textModeBtn" onclick="toggleTextMode()">
+      テキストを直接入力してスキャン ▾
+    </button>
+  </div>
+
+  <div class="text-input-area" id="textInputArea">
+    <textarea id="directText" placeholder="スキャンしたいテキストをここに貼り付けてください..."></textarea>
+    <button class="scan-text-btn" onclick="scanDirectText()" id="scanTextBtn">🔍 スキャン実行</button>
+  </div>
+
+  <!-- Scanning -->
+  <div class="scanning-overlay" id="scanning">
+    <div class="scan-spinner"></div>
+    <div class="scan-status" id="scanStatus">スキャン中...</div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="result-header">
+      <div class="result-title" id="resultTitle">📊 スキャン結果</div>
+      <div class="result-status" id="resultStatus"></div>
+    </div>
+
+    <!-- S18: Top Priority banner (rendered above the summary grid). Empty
+         array = display:none via the `.empty` modifier class. -->
+    <div class="top-priority-banner empty" id="topPriorityBanner"></div>
+
+    <div class="summary-grid" id="summaryGrid"></div>
+
+    <div id="detailSections"></div>
+
+    <div class="actions" id="actions"></div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    <div class="disclaimer-title" id="disclaimerTitle">⚠️ 免責事項 / Disclaimer</div>
+    <div id="disclaimerBody">
+      <p>本ツールは、テキスト、HTML、およびOfficeファイル（Word, PDF, PowerPoint）に含まれる可能性のある不審なパターン（不可視文字、隠しテキスト等）を検出するための<strong>参考ツール</strong>です。</p>
+      <br>
+      <p>• 検出結果はすべての脅威を網羅するものではなく、<strong>安全性を保証するものではありません</strong>。</p>
+      <p>• 新しい攻撃手法には対応できない場合があります。</p>
+      <p>• すべての処理はお使いのブラウザ上（ローカル）で完結し、ファイルの内容が外部に送信されることはありません。</p>
+      <p>• 本ツールの使用により生じた損害について、開発者は一切の責任を負いません。</p>
+      <br>
+      <p style="color:#8892a8;">This tool is a <strong>reference utility</strong> for detecting suspicious patterns (invisible characters, hidden text, etc.) in text, HTML, and Office files (Word, PDF, PowerPoint). It does <strong>not guarantee safety</strong>. All processing is performed locally in your browser — no data is sent externally. The developers assume no liability for any damages arising from the use of this tool.</p>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Shield Scanner — Made with 🛡️ by <a href="https://github.com/nisake" target="_blank">NISAKE</a>
+  </footer>
+</div>
+
+<!--RULES_INJECT-->
+<!--BUNDLE_INJECT-->
+</body>
+</html>

@@ -1,0 +1,3 @@
+Header,Field
+"normal","	=cmd|'/c calc'!A1"
+"normal2","=HYPERLINK(""https://evil.example.com"",""x"")"

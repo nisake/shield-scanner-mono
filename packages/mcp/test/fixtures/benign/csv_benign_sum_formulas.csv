@@ -1,0 +1,5 @@
+Header,Formula
+Sum,=SUM(A1:A10)
+Avg,=AVERAGE(B:B)
+Look,=VLOOKUP(A1,B:C,2,FALSE)
+If,=IF(A1>0,"yes","no")

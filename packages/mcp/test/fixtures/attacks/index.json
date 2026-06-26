@@ -1,0 +1,408 @@
+[
+  {
+    "file": "01-zwsp-injection.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "U+200B (Zero Width Space) injected between two words.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "02-bidi-override-trojan.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "U+202E (Right-to-Left Override) — Trojan Source style attack.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "03-ascii-smuggler-tags.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "Unicode Tags block ASCII Smuggler — invisible 'evil' payload.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "04-cyrillic-homoglyph.txt",
+    "expectCategories": [
+      "homoglyphs"
+    ],
+    "notes": "Cyrillic 'а' (U+0430) impersonating Latin 'a' in 'admin'.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "05-ignore-previous-instructions.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "Canonical instruction-override phrase.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "06-variation-selector-run.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "VS16 + VS17-256 run NOT adjacent to CJK/Emoji base — M1 landed via variation-selectors.js (run of 5 VS17+ chars triggers danger).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "07-isolate-run.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "U+2066-2069 isolate run — M2 detection (4 isolates triggers Bidi over-use rule, all upgraded to danger).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "08-jailbreak-phrase.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "Jailbreak phrase. Today's suspicious-patterns.json does not cover 'forget all rules' / 'jailbroken' — future enrichment target.",
+    "currentlyDetected": false
+  },
+  {
+    "file": "09-display-none-html.txt",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "notes": "w:vanish / display:none style hidden instruction in HTML.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "10-chat-template-tokens.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "S5 chat template role tokens (ChatML / Llama2 / Llama3 / generic Human:/Assistant:). Danger-tier model tokens must fire; warning-tier generic markers also fire but on their own would never escalate the danger count.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "11-eml-suspicious-replyto.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "S11 extended-headers: Reply-To carries an instruction-override phrase. Raw-text analyze() catches it via suspiciousPatterns; scanEmail() additionally surfaces it under the extended_headers section.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "12-zalgo.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "Zalgo: 'ignore' with 10-18 stacked combining marks per base. S2 wired detectCombiningChars into analyze() — combining-stack findings now surface under invisibleUnicode (severity=danger when depth>=15).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "13-md-image-exfil.txt",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "notes": "S4 Markdown image exfiltration corpus. L1: strong keys `prompt=` + `leak=` on unknown host -> danger. L2 (v1.9.0): single weak key `session=` on user-content subdomain spoof (attacker-spoofed-notion.example, NOT in userContentHosts exact set) -> warning under host-tier asymmetry. L3 (v1.9.0): single weak key `context=` on public IP literal -> warning (was danger pre-v1.9.0). L4: i.imgur.com is in imageOnlyHosts (suffix-match short-circuit) — `session=preview` weak key MUST NOT fire, pins the safe-host bypass invariant. L5 (v1.11.0): HTML <img src=...> on unknown host with strong key `apikey=` -> danger via html-img element. L6 (v1.11.0): HTML <img> on public IP literal + weak key `context=` -> warning (host-tier asymmetry mirrors inline path). L7 (v1.11.0): reference-image (![alt][id] + [id]: url def-line) with strong key `system_prompt=` on unknown host -> danger via md-image-ref element. L10 (v1.13.0): HTML <img> with entity-encoded quote wrappers (`&quot;…&quot;`) around the URL. Raw src token captures the entity-encoded form, then the v1.13.0 entity-decode pass strips the surrounding `\"` and reclassifies -> danger via strong key `prompt=`, meta.entityDecoded=true. L11 (v1.13.0): HTML <img> with `&amp;`-encoded query separator. Raw URL parses but searchParams sees `safekey` + `amp;prompt` (off-list); decoded `&amp;`->`&` yields `safekey` + `prompt` -> 1 strong -> danger via entity-decoded path. fileType inferred as html once <img> tags appear, which still routes through detectMarkdownExfil (HIDDEN_ELEMENT_FILETYPES).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "14-chatml-role-injection.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "v1.5.0 followup: ChatML role-injection (token <|im_start|> + role keyword + attack verb). Danger-tier — token+role combo is the signal even without a verb on the same line.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "15-system-bracket-injection.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "v1.5.0 followup parity fixture: `[system]` bracket role spoof + override verb. Authority impersonation fires danger; instruction-override verb fires danger too.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "16-system-xml-tag-injection.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "v1.5.0 followup parity fixture: <system>...</system> XML tag (warning per Bug #2) plus an override verb (danger) inside the tag body. Overall danger; useful for Web/MCP parity coverage.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "17-heading-system-impersonation.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "v1.10.0 Theme B: markdown ### System: heading role-impersonation, 3 occurrences + instruction-override verbs (ignore previous instructions / disregard prior / forget all previous). Heading impersonation fires 3+ times so the transcript-noise 3-hit threshold lets it surface on the banner; override verbs fire danger independently.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "18-heading-assistant-3pack.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "notes": "v1.10.0 Theme B: 3x ## Assistant: heading role-hijack — fake assistant turns. Heading impersonation hits 3 times (banner threshold met). Fixture pins that H2 + Assistant role keyword + colon all match the new pattern.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_dde_calc.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "Classic CSV-injection — DDE channel launching calc. Expected: 1 danger (FI-01).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_powershell_b64.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "DDE + base64 powershell encoded command. Expected: 1 danger (FI-01).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_hyperlink_phish.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "HYPERLINK phishing target with payload. Expected: 1 danger (HYPERLINK), benign =A1+B1 row must NOT fire.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_webservice_exfil.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "Excel 2013+ WEBSERVICE zero-click HTTP exfil. Expected: 1 danger (WEBSERVICE).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_importxml_gsheets.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "Google Sheets IMPORTXML exfil. Expected: 1 danger (IMPORTXML).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_tab_prefix_bypass.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "TAB-prefix + CR-prefix bypasses of naive ^= regex. Expected: 2 danger findings.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "csv_formula_fullwidth_equals.csv",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "Fullwidth equals (U+FF1D) prefix bypass. Expected: 1 danger (normalizeFormulaPrefix maps to '=').",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_dde_command_in_f_node.xlsx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "FI-01 — <f> node holds DDE command, <v> cache is benign. Sheet1!A1 danger.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_very_hidden_with_auto_open.xlsx",
+    "expectCategories": [
+      "hiddenHtml",
+      "suspiciousPatterns"
+    ],
+    "category": "formula-injection",
+    "notes": "SC-02 danger (veryHidden) + FI-03 danger (Auto_Open → veryHidden sheet) + MV-04 warning (macrosheets/).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_state_confusion_capitalised.xlsx",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "hiddenHtml",
+    "notes": "SC-02 warning — non-canonical state token (capital V). Verifies case-insensitive non-'visible' match.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_external_link_unc_smb.xlsx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "external-ref",
+    "notes": "ER-03 danger — UNC/SMB external link target (NTLM leak risk).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_drawing_external_image_unc.xlsx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "external-ref",
+    "notes": "ER-03 danger — drawing rels point at UNC image target.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_vba_present_extension_mismatch.xlsx",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "hiddenHtml",
+    "notes": "MV-04 danger x2 — vbaProject.bin present AND extension/contentType mismatch.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_docprops_prompt_injection.xlsx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "metadata-injection",
+    "notes": "MD-05 warnings — instruction-shaped text in dc:description AND app.Manager.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_hyperlinkbase_silent_rewrite.xlsx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "external-ref",
+    "notes": "MD-06 danger — HyperlinkBase points at external attacker origin.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_threaded_comment_persona_spoof.xlsx",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "hidden-comment",
+    "notes": "MV-07 warning — instruction-shaped threaded comment; persona displayName surfaced in contextLocation.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_numfmt_triple_semicolon_hidden.xlsx",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "hiddenHtml",
+    "notes": "MD-08 danger — numFmt ';;;' applied to a cell with looksLikeInstruction-matching text.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_customxml_payload.xlsx",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "hiddenHtml",
+    "notes": "MV-09 warning — instruction-shaped payload smuggled in customXml/item1.xml.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "xlsx_rtlo_in_sheet_name.xlsx",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "category": "invisibleUnicode",
+    "notes": "MD-11 wiring — RTLO (U+202E) in sheet name flows through unicode pipeline.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_zip_bomb_high_ratio.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-bomb",
+    "notes": "AR-01 — 1MB of 'a' DEFLATE-compressed; ratio > 1000:1 trips danger.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_zip_bomb_total_cap.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-bomb",
+    "notes": "AR-01 — central directory uncompressedSize header rewritten to 200MB; real archive ~1KB.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_path_traversal_dotdot.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "zip-slip",
+    "notes": "AR-03 — entry name uses ../../../ traversal.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_path_traversal_absolute.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "zip-slip",
+    "notes": "AR-03 — absolute /etc/shadow entry name.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_path_traversal_nullbyte.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "zip-slip",
+    "notes": "AR-03 — embedded NUL byte in entry name to bypass naive extension check.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_nested_depth_4.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-depth",
+    "notes": "AR-02 — zip(zip(zip(zip(payload)))) — depth 4 exceeds MAX_RECURSION_DEPTH=3.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_encrypted_entry.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-protected",
+    "notes": "AR-04 — hand-rolled minimal encrypted ZIP (GP flag bit 0 set); JSZip throws on loadAsync.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_entry_count_overflow.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-entry-cap",
+    "notes": "AR-07 — 10001 entries (1 byte each, STORE) exceeds MAX_ARCHIVE_ENTRY_COUNT=10000.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_suspicious_ext_exe.zip",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "archive-suspicious-ext",
+    "notes": "AR-05 — single .exe entry triggers SuspiciousArchiveExt warning.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "archive_macro_in_nested_xlsm.zip",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "category": "archive-fold",
+    "notes": "AR-08 — nested XLSM with vbaProject.bin; inner MV-04 findings should fold into hiddenHtml via enrichFindingsLocation.",
+    "currentlyDetected": true
+  }
+]

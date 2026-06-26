@@ -1,0 +1,25 @@
+{
+  "name": "@shield-scanner/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "vitest run",
+    "smoke": "node test/run-tests.js",
+    "generate:fixtures:pdf": "node test/fixtures/_generate_pdf_struct.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@shield-scanner/core": "*",
+    "cheerio": "^1.2.0",
+    "jszip": "^3.10.1",
+    "mailparser": "^3.6.6",
+    "pdfjs-dist": "^4.0.379",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "pdf-lib": "1.17.1"
+  }
+}

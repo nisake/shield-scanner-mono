@@ -1,0 +1,16 @@
+![s3 sigv4](https://my-bucket.s3.us-east-1.amazonaws.com/img.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA%2F20260626%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260626T120000Z&X-Amz-Expires=900&X-Amz-Signature=abc123def&X-Amz-SignedHeaders=host)
+![cloudfront](https://d1234example.cloudfront.net/path/img.png?Expires=1700000000&Signature=sig-base64-abc&Key-Pair-Id=APKAEXAMPLE)
+![gcs sign](https://storage.example.com/bucket/img.png?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=acct%40proj.iam&X-Goog-Date=20260626T000000Z&X-Goog-Expires=900&X-Goog-Signature=sig&X-Goog-SignedHeaders=host)
+![azure sas](https://acct.blob.core.windows.net/cont/img.png?sv=2022-11-02&ss=b&srt=sco&sp=r&se=2026-12-31T00:00:00Z&st=2026-01-01T00:00:00Z&spr=https&sig=signaturevalue)
+![bunny signed](https://example.b-cdn.net/img.png?token=signed-token-abc&expires=1700000000)
+![fastly purge token](https://cdn.example.com/img.png?key=fastly-cache-key&exp=1700000000&hash=sha1value)
+![keycdn signed](https://example.kxcdn.com/img.png?expires=1700000000&signature=signed-value-abc)
+![akamai signed](https://example.akamaized.net/img.png?token=hdnea%3Dexp%3D1700000000)
+![imagekit signed](https://ik.imagekit.io/demo/img.png?ik-s=abcsigvalue&ik-t=1700000000)
+![signed v2](https://cdn.example.org/img.png?key_id=K1&expires=1700000000&signature=v2-sig-base64)
+![signed minimal](https://media.example.net/img.png?signature=abc&expires=1700000000)
+![presigned put](https://upload.example.com/img.png?upload_id=abc&signature=sig&expires=1700000000)
+<img src="https://my-bucket.s3.amazonaws.com/img.png?X-Amz-Signature=abc&X-Amz-Date=20260626" alt="s3 html">
+![cloudfront ref][cfref]
+
+[cfref]: https://d1example.cloudfront.net/path/img.png?Expires=1700000000&Signature=sig-cf&Key-Pair-Id=APKAEXAMPLE

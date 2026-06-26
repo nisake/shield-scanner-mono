@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.log
+
+# 個人向け内部ドキュメント (公開リポに含めない)
+HANDOFF.md
+BLUEGREEN_HANDOVER.md
+CHANGELOG.md

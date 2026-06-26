@@ -1,0 +1,34 @@
+[
+  {
+    "file": "01-jpeg-canon-exif.jpg",
+    "notes": "Canonical legitimate camera EXIF"
+  },
+  {
+    "file": "02-jpeg-iptc-embargo.jpg",
+    "notes": "News embargo — \"do not\" alone is 1 verb position, must NOT fire"
+  },
+  {
+    "file": "03-jpeg-xmp-print-instructions.jpg",
+    "notes": "Legit print instructions — must NOT fire"
+  },
+  {
+    "file": "04-jpeg-stock-photo-instructions.jpg",
+    "notes": "Stock photo legal boilerplate — must NOT fire"
+  },
+  {
+    "file": "05-png-matplotlib.png",
+    "notes": "matplotlib screenshot — must NOT fire"
+  },
+  {
+    "file": "06-jpeg-iphone.jpg",
+    "notes": "iPhone EXIF — all sub-threshold"
+  },
+  {
+    "file": "07-jpeg-japanese-photographer.jpg",
+    "notes": "Japanese XPAuthor + Latin copyright — no homoglyph FP"
+  },
+  {
+    "file": "08-png-screenshot.png",
+    "notes": "Screenshot tool output"
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "_description": "S10 — CSV/XLSX formula-injection rules. Used by formula-injection.js, NOT loaded into the generic suspicious-patterns pipeline. Each rule fires AFTER normalizeFormulaPrefix (whitespace strip + fullwidth equals map) AND normalizeXlfn (strip _xlfn. / _xlfn._xlws. multi-prefix). Severity = 'danger' for the function blocklist (dangerous-function match → category='formula-injection'); severity = 'warning' is emitted by formula-injection.js's prefix-only path (FI-02) with numeric/phone suppression, not from this file. Flags: 'i' for case-insensitive function names.",
+  "patterns": [
+    {
+      "name": "DDE Excel command",
+      "pattern": "\\b(?:cmd|powershell|mshta|wscript|cscript|rundll32|regsvr32)\\b\\|",
+      "flags": "i",
+      "severity": "danger"
+    },
+    {
+      "name": "Excel network exfil function",
+      "pattern": "\\b(?:HYPERLINK|WEBSERVICE|FILTERXML|IMPORTXML|IMPORTHTML|IMPORTDATA|IMPORTFEED|IMPORTRANGE)\\s*\\(",
+      "flags": "i",
+      "severity": "danger"
+    },
+    {
+      "name": "Excel macro registration function",
+      "pattern": "\\b(?:DDE|DDEAUTO|CALL|REGISTER|EXEC|RTD)\\s*\\(",
+      "flags": "i",
+      "severity": "danger"
+    }
+  ]
+}

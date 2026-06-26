@@ -1,0 +1,17 @@
+![imgur w data](https://i.imgur.com/abc123.png?data=cache-bust&context=feed)
+![imgur w msg](https://i.imgur.com/xyz789.jpg?msg=preview&text=alt)
+![unsplash w session](https://images.unsplash.com/photo-1234.jpg?session=anon&auth=public&context=gallery)
+![jsdelivr w payload](https://cdn.jsdelivr.net/gh/foo/bar/img.png?payload=embed&history=v1)
+![ghraw w chat](https://raw.githubusercontent.com/foo/bar/main/img.png?chat=preview&system=light)
+![ghuser w msg](https://user-images.githubusercontent.com/12345/abc.png?msg=display&data=meta)
+![camo w sys](https://camo.githubusercontent.com/abc/img.png?sys=lightbox&context=readme)
+![shields w auth](https://img.shields.io/badge/state-ok-green?auth=public&sessid=demo)
+![ytimg w session](https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg?session=preview&data=thumb)
+![discord cdn w data](https://cdn.discordapp.com/attachments/1/2/img.png?data=preview&context=feed&message=embed)
+![twimg w history](https://pbs.twimg.com/media/abc.jpg?history=tweet&session=preview&chat=thread)
+![placehold w text](https://placehold.co/600x400/png?text=Hello&data=demo&payload=label)
+<img src="https://i.imgur.com/htmlimg.png?session=html&chat=preview" alt="imgur html">
+![jsdelivr ref][jsdref]
+
+[jsdref]: https://cdn.jsdelivr.net/gh/foo/bar/img.png?context=embed&session=demo
+<img src="https://i.imgur.com/abc.png?session=A&amp;chat=B&amp;context=C" alt="entity amp safe">

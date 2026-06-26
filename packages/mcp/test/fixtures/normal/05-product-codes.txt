@@ -1,0 +1,4 @@
+Order ID: ABC-12345-XYZ
+Tracking: 1Z999AA10123456784
+SKU: PROD_2024_v3.1
+Email: support@example.com

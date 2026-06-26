@@ -1,0 +1,47 @@
+{
+  "version": "1.8.0",
+  "description": "S13 — ZIP/archive recursive-scan detection rules. Consumed by archive-detection.js (pure helpers) and the MCP/Web archive parsers. Findings flow into the existing 5-bucket schema: zip-slip + suspicious-ext + Office-rename fold into suspiciousPatterns (R13 invariant), and the structural caps (bomb / depth / protected / entryCap) live on `summary.archive` sibling keys — never a new byCategory key. The parsers wrap detector outputs into the right shape; this JSON is the data side of those helpers.",
+  "suspiciousExtensions": [
+    { "ext": "exe", "label": "Windows executable" },
+    { "ext": "bat", "label": "Windows batch script" },
+    { "ext": "cmd", "label": "Windows command script" },
+    { "ext": "com", "label": "DOS command executable" },
+    { "ext": "scr", "label": "Windows screensaver executable" },
+    { "ext": "msi", "label": "Windows installer" },
+    { "ext": "dll", "label": "Windows dynamic library" },
+    { "ext": "lnk", "label": "Windows shortcut" },
+    { "ext": "scf", "label": "Windows Explorer command file" },
+    { "ext": "hta", "label": "HTML application" },
+    { "ext": "vbs", "label": "VBScript" },
+    { "ext": "ps1", "label": "PowerShell script" },
+    { "ext": "jar", "label": "Java archive" }
+  ],
+  "zipSlipPatterns": [
+    {
+      "name": "dotdot",
+      "description": "Path traversal via ../ segment",
+      "technique": "Zip Slip (parent-directory escape)"
+    },
+    {
+      "name": "absolute",
+      "description": "Absolute POSIX path (entry starts with /)",
+      "technique": "Zip Slip (absolute path)"
+    },
+    {
+      "name": "drive",
+      "description": "Windows drive-letter path (e.g. C:\\...)",
+      "technique": "Zip Slip (drive-letter path)"
+    },
+    {
+      "name": "nullbyte",
+      "description": "Null byte injection inside entry name",
+      "technique": "Zip Slip (null-byte injection)"
+    }
+  ],
+  "magicBytes": {
+    "zipLocalFileHeader": [80, 75, 3, 4],
+    "zipEmptyArchive": [80, 75, 5, 6],
+    "zipSpannedArchive": [80, 75, 7, 8]
+  },
+  "officePackageMarker": "[Content_Types].xml"
+}

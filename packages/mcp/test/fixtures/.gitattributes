@@ -1,0 +1,9 @@
+# Fixtures-local override: binary corpus files must NOT be touched by the
+# root-level `* text=auto eol=lf` rule, otherwise git's autocrlf would mangle
+# the bytes on Windows checkouts and break byte-identical regeneration.
+*.pdf binary
+*.zip binary
+*.docx binary
+*.pptx binary
+*.xlsx binary
+*.xlsm binary

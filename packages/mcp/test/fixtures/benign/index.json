@@ -1,0 +1,54 @@
+[
+  {
+    "file": "csv_benign_accounting_negatives.csv",
+    "notes": "Negative balances + phone numbers. Must NOT fire FI-02 (numeric/phone suppression)."
+  },
+  {
+    "file": "csv_benign_sum_formulas.csv",
+    "notes": "Safe Excel functions (=SUM/=AVERAGE/=VLOOKUP/=IF) — none in dangerous blocklist. Must NOT fire FI-01."
+  },
+  {
+    "file": "csv_benign_japanese_shift_jis.csv",
+    "notes": "Shift-JIS encoded Japanese product names, no BOM. Encoding fallback must succeed with 0 findings."
+  },
+  {
+    "file": "csv_benign_url_in_cell.csv",
+    "notes": "Plain HTTPS URL in cell (no =, no HYPERLINK function). Must NOT fire FI-01 or FI-02."
+  },
+  {
+    "file": "xlsx_benign_invoice_template.xlsx",
+    "notes": "Real-world invoice template — visible sheet, =SUM, canonical company URL, non-instruction docProps. Expected: 0 findings."
+  },
+  {
+    "file": "xlsx_benign_with_legitimate_hidden_sheet.xlsx",
+    "notes": "Legitimate hidden 'Lookups' sheet with reference tables only. Expected: 1 warning SC-02 (acknowledged FP). Documents that severity stays warning (does not dominate topFindings)."
+  },
+  {
+    "file": "xlsx_benign_with_embedded_logo_image.xlsx",
+    "notes": "Standard workbook with xl/media/image1.png logo (well under 5MB cap). Expected: 0 findings (clean logo)."
+  },
+  {
+    "file": "xlsx_benign_chart_with_title.xlsx",
+    "notes": "Workbook with legitimate chart title 'Q4 Revenue by Region'. Expected: 0 findings (title doesn't trip looksLikeInstruction)."
+  },
+  {
+    "file": "archive_benign_single_txt.zip",
+    "notes": "Single text entry, no findings expected."
+  },
+  {
+    "file": "archive_benign_multiple_docs.zip",
+    "notes": "Standard archive: docx + xlsx + png. Should produce 0 findings (clean Office + tiny PNG)."
+  },
+  {
+    "file": "archive_benign_normal_compression.zip",
+    "notes": "DEFLATE-compressed prose, ratio well under RATIO_WARN=100."
+  },
+  {
+    "file": "archive_benign_nested_depth_2.zip",
+    "notes": "outer.zip(inner.zip(readme.txt)) — depth 2 within MAX_RECURSION_DEPTH=3."
+  },
+  {
+    "file": "archive_benign_image_bundle.zip",
+    "notes": "Multiple legitimate image entries, no findings expected."
+  }
+]

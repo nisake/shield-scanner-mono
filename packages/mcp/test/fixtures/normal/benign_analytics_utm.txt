@@ -1,0 +1,19 @@
+![camp1](https://www.example.com/og.png?utm_source=newsletter&utm_medium=email&utm_campaign=spring2026)
+![camp2](https://blog.example.com/cover.jpg?utm_source=twitter&utm_medium=social&utm_campaign=launch&utm_content=hero)
+![camp3](https://shop.example.com/banner.png?utm_source=google&utm_medium=cpc&utm_campaign=brand&utm_term=widgets&utm_content=ad1)
+![ref1](https://news.example.org/img.jpg?ref=homepage&campaign_id=42)
+![ref2](https://docs.example.io/diagram.png?source=sidebar&medium=referral)
+![hub](https://landing.example.com/hero.webp?utm_source=hubspot&utm_medium=email&_hsenc=abc&_hsmi=123)
+![klaviyo](https://images.klaviyo.com/img/abc.png?utm_source=klaviyo&utm_medium=email&utm_campaign=welcome&_kx=token123)
+![mailchimp](https://mcusercontent.com/abc/images/banner.png?utm_source=mailchimp&utm_medium=email&utm_campaign=monthly)
+![pardot](https://go.example.com/img/cta.png?utm_source=pardot&utm_medium=email&utm_campaign=q2&pi_email=hash)
+![marketo](https://images.example.com/promo.png?utm_source=marketo&utm_medium=email&utm_campaign=launch&mkt_tok=tok-abc)
+![ga4 imgpixel](https://region1.google-analytics.com/g/collect?v=2&tid=G-XYZ&en=view_item&_p=1&_s=1&_ee=1&_uip=0&dl=https%3A%2F%2Fshop.example.com)
+![dbl click](https://stats.g.doubleclick.net/dc.gif?t=dc&aip=1&_r=3&v=1&_v=j101&tid=UA-12345&dh=example.com)
+![bing pixel](https://bat.bing.com/action/0?ti=12345&Ver=2&mid=abc-def&evt=pageLoad&en=Y)
+![tiktok pixel](https://analytics.tiktok.com/api/v2/pixel?sdkid=ABCDEF&lib=img&pixel_event=PageView)
+![linkedin pixel](https://px.ads.linkedin.com/collect/?pid=12345&fmt=gif)
+![pinterest pixel](https://ct.pinterest.com/v3/?tid=abc&event=pagevisit&noscript=1)
+![ga ref][garef]
+
+[garef]: https://www.google-analytics.com/collect?v=1&t=event&tid=UA-12345-1&cid=anon-id&ec=newsletter&ea=open

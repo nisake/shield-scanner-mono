@@ -1,0 +1,19 @@
+{
+  "name": "@shield-scanner/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./env": "./src/env/index.js",
+    "./env/node": "./src/env/node/index.js",
+    "./env/web": "./src/env/web/index.js"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0"
+  }
+}

@@ -1,0 +1,2 @@
+Header,Field
+foo,＝cmd|'/c calc'!A1

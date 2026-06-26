@@ -1,0 +1,169 @@
+[
+  {
+    "file": "01-jpeg-com-injection.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG jpeg:COM",
+    "currentlyDetected": true,
+    "notes": "JPEG COM marker free-text injection"
+  },
+  {
+    "file": "02-jpeg-exif-usercomment.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG exif:UserComment",
+    "currentlyDetected": true,
+    "notes": "EXIF UserComment — canonical free-text vector"
+  },
+  {
+    "file": "03-jpeg-exif-imagedescription.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG exif:ImageDescription",
+    "currentlyDetected": true,
+    "notes": "EXIF ImageDescription"
+  },
+  {
+    "file": "04-jpeg-xmp-instructions.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG xmp:photoshop:Instructions",
+    "currentlyDetected": true,
+    "notes": "XMP photoshop:Instructions"
+  },
+  {
+    "file": "05-jpeg-iptc-caption.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG iptc:Caption",
+    "currentlyDetected": true,
+    "notes": "IPTC Caption/Abstract (2:120)"
+  },
+  {
+    "file": "06-png-text-description.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG png:tEXt:Description",
+    "currentlyDetected": true,
+    "notes": "PNG tEXt Description"
+  },
+  {
+    "file": "06b-png-ztxt.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG png:zTXt:Description",
+    "currentlyDetected": true,
+    "notes": "PNG zTXt (compressed Latin-1)"
+  },
+  {
+    "file": "07-png-itxt-xmp.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG xmp:photoshop:Instructions",
+    "currentlyDetected": true,
+    "notes": "PNG iTXt carrying XMP (unwrapped to xmp label)"
+  },
+  {
+    "file": "08-png-exif-chunk.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG png:eXIf:UserComment",
+    "currentlyDetected": true,
+    "notes": "PNG eXIf chunk (PNG 1.5+)"
+  },
+  {
+    "file": "09-png-xptitle-utf16le.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG png:eXIf:XPTitle",
+    "currentlyDetected": true,
+    "notes": "Microsoft XPTitle UTF-16LE"
+  },
+  {
+    "file": "10-webp-exif-imagedescription.webp",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG webp:exif:ImageDescription",
+    "currentlyDetected": true,
+    "notes": "WebP EXIF chunk"
+  },
+  {
+    "file": "11-webp-xmp.webp",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG webp:xmp:dc:description",
+    "currentlyDetected": true,
+    "notes": "WebP XMP chunk"
+  },
+  {
+    "file": "12-gif-comment.gif",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG gif:Comment",
+    "currentlyDetected": true,
+    "notes": "GIF89a Comment Extension"
+  },
+  {
+    "file": "13-gif-plaintext.gif",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG gif:PlainText",
+    "currentlyDetected": true,
+    "notes": "GIF Plain Text Extension"
+  },
+  {
+    "file": "14-tiff-exif-usercomment.tiff",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG tiff:UserComment",
+    "currentlyDetected": true,
+    "notes": "TIFF native EXIF"
+  },
+  {
+    "file": "15-jpeg-split-payload.jpg",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG aggregate",
+    "currentlyDetected": true,
+    "notes": "Split across 3 fields — caught by unconditional joined-text pass"
+  },
+  {
+    "file": "97-png-ztxt-zipbomb.png",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "expectContextLocation": "IMG png:zTXt:Description",
+    "currentlyDetected": true,
+    "notes": "zTXt zip-bomb with INJECT at start — streaming inflate keeps first 5 MB, payload caught, truncation finding emitted"
+  },
+  {
+    "file": "98-jpeg-ifd-cycle.jpg",
+    "expectCategories": [],
+    "expectContextLocation": null,
+    "currentlyDetected": false,
+    "notes": "SubIFD pointing back to IFD0 — depth>3 guard fires"
+  },
+  {
+    "file": "99-truncated.jpg",
+    "expectCategories": [],
+    "expectContextLocation": null,
+    "currentlyDetected": false,
+    "notes": "Malformed APP1 length"
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "file": "01-japanese-prose.txt",
+    "notes": "Japanese prose, tab + LF + full-width digit. Pure CJK -> no homoglyph FPs."
+  },
+  {
+    "file": "02-japanese-ivs.txt",
+    "notes": "Legitimate IVS (CJK + VS17). Today's PUA detector flags VS17 as warning — tracked in baseline."
+  },
+  {
+    "file": "03-english-prose.txt",
+    "notes": "Plain English prose, no attacks."
+  },
+  {
+    "file": "04-emoji.txt",
+    "notes": "Legitimate emoji incl. VS16 (U+FE0F). U+FE0F is not flagged by current detector."
+  },
+  {
+    "file": "05-product-codes.txt",
+    "notes": "Form-input style product codes / IDs."
+  },
+  {
+    "file": "06-md-images.txt",
+    "notes": "S4 FP corpus: legitimate Markdown image URLs. Includes deliberately gnarly signed-URL cases (Firebase token=, S3 X-Amz-Signature=) that must NOT trigger S4. v1.9.0: expanded to 35 lines covering GA/GA4/Mixpanel/Segment/Amplitude/Hotjar/FB pixel/CDN versioned/CloudFront-signed/Cloudinary/Imgix/etc. v1.11.0: added 3 HTML <img> shapes (double/single/bare quote) on imageOnlyHosts + 1 reference-image (![refsafe][cdn-ref] -> unsplash) to exercise the parity paths against safe-host short-circuit."
+  },
+  {
+    "file": "benign_analytics_utm.txt",
+    "notes": "v1.9.0 md-exfil FP safety net: real-world analytics/marketing-pixel URLs (utm_*, GA4 _p/_s/_ee, HubSpot _hsenc, Klaviyo _kx, Marketo mkt_tok, DoubleClick, Bing, TikTok, LinkedIn, Pinterest). Off-allowlist hosts on purpose, but query keys do not intersect weak/strong lists -> must stay quiet under weak>=2 today AND weak>=1 after the relax. v1.11.0: added 1 reference-image GA collect URL via def-line ![ga ref][garef] to cover ref-image classification path on analytics hosts."
+  },
+  {
+    "file": "benign_cdn_signed.txt",
+    "notes": "v1.9.0 md-exfil FP safety net: signed-CDN URLs (S3 SigV4, CloudFront, GCS V4, Azure SAS, Bunny, Fastly, KeyCDN, Akamai, ImageKit). All keys (expires/signature/Key-Pair-Id/X-Amz-*/X-Goog-*/sv/sig) are off the weak/strong lists -> must stay 0 warnings. v1.11.0: added S3 HTML <img> and CloudFront reference-image to cover the new detector paths on signed-CDN hosts."
+  },
+  {
+    "file": "benign_image_hosts_weak_key.txt",
+    "notes": "v1.9.0 md-exfil FP safety net: deliberately noisy weak-key params (data=, msg=, session=, chat=, system=, etc.) on safe imageOnlyHosts (imgur/unsplash/jsdelivr/githubusercontent/shields/ytimg/discord/twimg/placehold). Proves the isSafeHost short-circuit fires BEFORE key counting, so the threshold relax cannot regress these. v1.11.0: added imgur HTML <img> with weak keys + jsdelivr reference-image with weak keys to prove the short-circuit applies uniformly to all 3 detector paths (inline / ref-image / html-img). v1.13.0: added 1 imgur HTML <img> with `&amp;`-joined weak keys to prove the safe-host short-circuit applies on the entity-decoded path too — `&amp;` decode yields more weak keys post-decode, but classifyUrl still returns null on the imageOnly host. BASELINE_WARNINGS stays 0."
+  },
+  {
+    "file": "benign_markdown_heading_blog.txt",
+    "notes": "v1.10.0 Theme B FP corpus: legitimate Anthropic/Claude API docs & RLHF blog excerpts that use `## System:` / `### Assistant:` / `### Role: User` headings as section labels. New Markdown heading impersonation pattern will fire warnings here, but: (a) dangerCount must stay 0, (b) topFindings must stay empty (3-hit threshold gates banner — count >=3 OK, but no override verbs to escalate to danger and banner needs both signal-pattern survival AND priority), (c) BASELINE_WARNINGS pins the exact warning count discovered empirically (see false-positives.test.js)."
+  }
+]

