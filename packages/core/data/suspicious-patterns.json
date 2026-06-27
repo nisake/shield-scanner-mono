@@ -46,6 +46,6 @@
     { "name": "Llama2 system marker", "pattern": "<<SYS>>", "flags": "g", "severity": "warning" },
     { "name": "Llama2 system marker", "pattern": "<</SYS>>", "flags": "g", "severity": "warning" },
 
-    { "name": "Markdown heading impersonation", "pattern": "^\\s*#{1,6}\\s+(?:System|Assistant|User|Human|AI|Bot|Admin|Developer|Operator|Moderator)\\s*:", "flags": "gim", "severity": "warning" }
+    { "name": "Markdown heading impersonation", "pattern": "^\\s*#{1,6}\\s+(?:System|Assistant|User|Human|AI|Bot|Admin|Developer|Operator|Moderator|Agent|Tool|Function|Plugin|Skill|Workflow|Orchestrator|Subagent)\\s*:", "flags": "gim", "severity": "warning" }
   ]
 }

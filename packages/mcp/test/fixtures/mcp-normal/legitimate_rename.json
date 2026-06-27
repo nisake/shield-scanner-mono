@@ -1,0 +1,17 @@
+{
+  "tools": [
+    {
+      "name": "list_database_tables",
+      "description": "Renamed from 'list_tables' for clarity. Returns the list of tables in the configured database.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string",
+            "description": "Optional schema name to filter by"
+          }
+        }
+      }
+    }
+  ]
+}

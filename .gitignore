@@ -7,3 +7,6 @@ dist
 HANDOFF.md
 BLUEGREEN_HANDOVER.md
 CHANGELOG.md
+
+# 実験用 build スクリプト (ローカル絶対パスを hardcode する性質上、公開リポに含めない)
+packages/web/build-experiment*.mjs

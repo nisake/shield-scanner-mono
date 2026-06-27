@@ -1,0 +1,37 @@
+{
+  "tools": [
+    {
+      "name": "search_documents",
+      "description": "Search the knowledge base for documents matching a query. Returns the top 10 results sorted by relevance.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free-text search query"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "Maximum number of results to return"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "get_weather",
+      "description": "Return the current weather for a given city using OpenWeatherMap.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "City name, e.g. 'Tokyo' or 'San Francisco'"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ]
+}

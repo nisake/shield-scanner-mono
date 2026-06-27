@@ -1,11 +1,11 @@
 {
   "name": "@shield-scanner/web",
-  "version": "0.0.0",
+  "version": "1.20.0",
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "node build.mjs",
-    "test": "node test/harness.mjs && node test/test-s07-pdf.mjs && node test/test-s12-image.mjs && node test/test-s12-xr02-office-media.mjs && node test/test-s21-bulk-scan.mjs && node test/test-s16-reveal.mjs && node test/test-s1-alpha-homoglyphs.mjs && node test/test-s17-diff.mjs && node test/test-s10-xlsx.mjs && node test/test-s10-csv.mjs && node test/test-s19-pdf-struct.mjs && node test/test-s18-md-exfil.mjs && node test/test-s13-archive.mjs"
+    "build": "node build.mjs && node ../../tools/dist-budget.mjs",
+    "test": "node test/harness.mjs && node test/test-s07-pdf.mjs && node test/test-s12-image.mjs && node test/test-s12-xr02-office-media.mjs && node test/test-s21-bulk-scan.mjs && node test/test-s16-reveal.mjs && node test/test-s1-alpha-homoglyphs.mjs && node test/test-s17-diff.mjs && node test/test-s10-xlsx.mjs && node test/test-s10-csv.mjs && node test/test-s19-pdf-struct.mjs && node test/test-s18-md-exfil.mjs && node test/test-s13-archive.mjs && node test/test-s15-pdf-embedded-htmljs.mjs && node test/test-s17-xlsx-deep.mjs && node test/test-s16-pdf-nonjs-actions.mjs && node test/test-s18-docx-follina.mjs && node test/test-diff-preview.mjs && node test/test-batch-export.mjs && node test/test-svg-polyglot.mjs && node test/test-ipynb.mjs && node test/test-rtf.mjs && node test/test-structured-text.mjs"
   },
   "dependencies": {
     "@shield-scanner/core": "*"

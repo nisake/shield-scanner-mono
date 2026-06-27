@@ -1,0 +1,26 @@
+{
+  "_comment": "v1.18.0 detector benchmark thresholds. Each entry caps the per-call ms for a single detector against the largest synthetic input (50 MB plain text / 10000-line markdown). Values are initial-pin = peak observed reading across several wall-clock runs on a stock dev box, then padded ~2x because Node performance.now() on Windows has been measured to swing 50-100% between consecutive runs depending on GC + OS scheduling. CI gate: any detector exceeding its cap on the worst-case input fails the bench script with exit 1. Re-pin numbers when an intentional perf change lands, in the same commit.",
+  "_units": "milliseconds, per single analyze() call on the named input class",
+  "_baseline": "Baselines were measured on plain-50mb.txt (52 MB benign English text) on a Windows 10 dev box with iters=1. See tools/bench-latest.json for the actual reading the caps were derived from. For tighter signal, run with --iters=5 in a quieter environment.",
+  "thresholds": {
+    "invisibleUnicode": 6000,
+    "variationSelectors": 2000,
+    "combiningChars": 4000,
+    "controlChars": 2000,
+    "hiddenElements": 4000,
+    "markdownExfil": 4000,
+    "suspiciousPatterns": 4000,
+    "buildInvisibleStrippedShadow": 15000,
+    "shadowSuspiciousInvisibleStripped": 10000,
+    "buildNfkcShadow": 18000,
+    "shadowSuspiciousNfkc": 10000,
+    "formulaInjection": 1500,
+    "homoglyphs": 6000,
+    "mathBypass": 600
+  },
+  "regressionPct": 50,
+  "_regressionPctNote": "When tools/bench-latest.json exists from a previous run, CI compares per-detector ms on the 50 MB worst-case row. A detector that regresses by more than `regressionPct` percent against the previous run's median AND has a >= 5 ms baseline is flagged. Set to 50% (not the 20% the brief suggests) because perf.now() on Windows + a single-iter run has measured ~30-40% intrinsic variance. Tighten to 20% once iters=5 becomes the default and a multi-run smoothed baseline lands.",
+  "regressionPctCi": 10,
+  "minBaselineMsCi": 1,
+  "_ciGateNote": "v1.20.0 T5-BENCH-CI added these two keys for tools/bench-regression-gate.mjs (the standalone GitHub-Actions gate that diffs current vs. cached baseline bench-latest.json). regressionPctCi is the tighter 10% gate the brief calls for; minBaselineMsCi=1 keeps sub-1ms detectors out of the noise floor. The harness regressionPct (above) stays at 50% until iters=5 becomes the default — they intentionally diverge because the harness runs ad-hoc on a noisy dev box while the CI gate runs on a clean GHA runner with cached baseline."
+}

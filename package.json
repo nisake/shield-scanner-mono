@@ -1,11 +1,16 @@
 {
   "name": "shield-scanner-mono",
+  "version": "1.20.0",
   "private": true,
   "type": "module",
   "workspaces": ["packages/*"],
   "scripts": {
     "test": "npm test --workspaces --if-present",
-    "parity": "node tools/parity-check.mjs"
+    "parity": "node tools/parity-check.mjs",
+    "check": "npm test && node tools/dist-budget.mjs",
+    "bench": "node tools/bench-detector.mjs",
+    "bench:ci": "node tools/bench-ci-summary.mjs",
+    "bench:gate": "node tools/bench-regression-gate.mjs"
   },
   "devDependencies": {
     "vitest": "4.1.9",

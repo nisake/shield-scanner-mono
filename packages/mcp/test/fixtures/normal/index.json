@@ -38,5 +38,9 @@
   {
     "file": "benign_markdown_heading_blog.txt",
     "notes": "v1.10.0 Theme B FP corpus: legitimate Anthropic/Claude API docs & RLHF blog excerpts that use `## System:` / `### Assistant:` / `### Role: User` headings as section labels. New Markdown heading impersonation pattern will fire warnings here, but: (a) dangerCount must stay 0, (b) topFindings must stay empty (3-hit threshold gates banner — count >=3 OK, but no override verbs to escalate to danger and banner needs both signal-pattern survival AND priority), (c) BASELINE_WARNINGS pins the exact warning count discovered empirically (see false-positives.test.js)."
+  },
+  {
+    "file": "benign_trusted_allowlist_full.txt",
+    "notes": "v1.19.0 Tier 6 trusted-allowlist FP safety net: weak-key URLs against organisation-controlled hosts (Stripe / Auth0 / SendGrid / Mailgun / Hubspot / Zendesk / Intercom / Doubleclick / GoogleTagManager / Mixpanel / Amplitude / Okta / Hotjar / Klaviyo / Marketo / Postmark / NPM / PyPI / Segment) that the imageOnlyHosts / userContentHosts tiers don't cover. Each row exercises the suppress path (severity 'info', md-exfil-allowlist-suppressed). Customer-deployable namespaces (*.amazonaws.com / *.cloudfront.net / *.appspot.com / *.netlify.app / *.vercel.app / googleusercontent.com / *.storage.googleapis.com / *.slack.com / *.atlassian.net) are deliberately EXCLUDED from TRUSTED_HOSTS so they keep firing as danger on strong keys (safehost-subdomain-bypass.test.js). Strong-key downgrade (warning surface) is asserted in regression/allowed-host-allowlist.test.js, not here."
   }
 ]

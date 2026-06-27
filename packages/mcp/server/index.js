@@ -19,9 +19,10 @@ import { scanUrl } from "./tools/scan-url.js";
 import { scanEmail } from "./tools/scan-email.js";
 import { sanitizeText } from "./tools/sanitize-text.js";
 import { sanitizeFile } from "./tools/sanitize-file.js";
+import { scanMcpDescriptor } from "./tools/scan_mcp_descriptor.js";
 
 const SERVER_NAME = "shield-scanner-mcp";
-const SERVER_VERSION = "1.4.0";
+const SERVER_VERSION = "1.20.0";
 
 // ============================================================
 // Server initialization
@@ -195,6 +196,32 @@ const TOOLS = [
       required: ["file_path"],
     },
   },
+  {
+    name: "scan_mcp_descriptor",
+    description:
+      "MCP tool descriptor (mcp.json / claude_desktop_config.json / tools-list response) をスキャンしてディスクリプタ汚染攻撃 (CVE-2025-54136 / OWASP MCP03:2025) を検出する。description 内のプロンプトインジェクション・Tags 密輸・隠し指示文、name 重複 (shadow-tool collision)、baseline との SHA256 差分 (rug-pull) を分析。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        descriptor: {
+          type: "string",
+          description:
+            "Raw JSON string of the MCP descriptor (tools-list response / mcp.json / claude_desktop_config.json). Use EITHER this OR 'path'.",
+        },
+        path: {
+          type: "string",
+          description:
+            "Absolute path to the MCP descriptor JSON file. Use EITHER this OR 'descriptor'.",
+        },
+        baselinePath: {
+          type: "string",
+          description:
+            "Optional: absolute path to a baseline descriptor JSON for rug-pull SHA256 diff detection.",
+        },
+        ...VERBOSITY_PROP,
+      },
+    },
+  },
 ];
 
 // ============================================================
@@ -228,6 +255,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "sanitize_file":
         result = await sanitizeFile(args);
+        break;
+      case "scan_mcp_descriptor":
+        result = await scanMcpDescriptor(args);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);

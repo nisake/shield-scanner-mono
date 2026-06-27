@@ -1,0 +1,2323 @@
+{
+  "schemaVersion": 1,
+  "generatorVersion": "v1.18.0",
+  "sourceDateEpoch": 0,
+  "iters": 1,
+  "rows": [
+    {
+      "label": "attacks/01-zwsp-injection.txt",
+      "bytes": 67,
+      "fileType": "text",
+      "totalMedianMs": 7.702,
+      "totalMaxMs": 7.702,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.252,
+          "maxMs": 0.252,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.209,
+          "maxMs": 0.209,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.129,
+          "maxMs": 0.129,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.141,
+          "maxMs": 0.141,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.198,
+          "maxMs": 0.198,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.598,
+          "maxMs": 0.598,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.179,
+          "maxMs": 0.179,
+          "calls": 1
+        },
+        {
+          "name": "shadowSuspiciousInvisibleStripped",
+          "medianMs": 1.711,
+          "maxMs": 1.711,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 2.473,
+          "maxMs": 2.473,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.23,
+          "maxMs": 0.23,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/02-bidi-override-trojan.txt",
+      "bytes": 49,
+      "fileType": "text",
+      "totalMedianMs": 0.284,
+      "totalMaxMs": 0.284,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.051,
+          "maxMs": 0.051,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/03-ascii-smuggler-tags.txt",
+      "bytes": 48,
+      "fileType": "text",
+      "totalMedianMs": 1.931,
+      "totalMaxMs": 1.931,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.017,
+          "maxMs": 0.017,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.047,
+          "maxMs": 0.047,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "shadowSuspiciousInvisibleStripped",
+          "medianMs": 1.505,
+          "maxMs": 1.505,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/04-cyrillic-homoglyph.txt",
+      "bytes": 60,
+      "fileType": "text",
+      "totalMedianMs": 0.486,
+      "totalMaxMs": 0.486,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.08,
+          "maxMs": 0.08,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/05-ignore-previous-instructions.txt",
+      "bytes": 62,
+      "fileType": "text",
+      "totalMedianMs": 0.445,
+      "totalMaxMs": 0.445,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.02,
+          "maxMs": 0.02,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.161,
+          "maxMs": 0.161,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/06-variation-selector-run.txt",
+      "bytes": 17,
+      "fileType": "text",
+      "totalMedianMs": 0.335,
+      "totalMaxMs": 0.335,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "shadowSuspiciousInvisibleStripped",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.12,
+          "maxMs": 0.12,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/07-isolate-run.txt",
+      "bytes": 26,
+      "fileType": "text",
+      "totalMedianMs": 0.222,
+      "totalMaxMs": 0.222,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.022,
+          "maxMs": 0.022,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/08-jailbreak-phrase.txt",
+      "bytes": 66,
+      "fileType": "text",
+      "totalMedianMs": 0.194,
+      "totalMaxMs": 0.194,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/09-display-none-html.txt",
+      "bytes": 126,
+      "fileType": "text",
+      "totalMedianMs": 0.302,
+      "totalMaxMs": 0.302,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.022,
+          "maxMs": 0.022,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.023,
+          "maxMs": 0.023,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.015,
+          "maxMs": 0.015,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.023,
+          "maxMs": 0.023,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.02,
+          "maxMs": 0.02,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/10-chat-template-tokens.txt",
+      "bytes": 257,
+      "fileType": "text",
+      "totalMedianMs": 0.85,
+      "totalMaxMs": 0.85,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.043,
+          "maxMs": 0.043,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.046,
+          "maxMs": 0.046,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.031,
+          "maxMs": 0.031,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.024,
+          "maxMs": 0.024,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.043,
+          "maxMs": 0.043,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.015,
+          "maxMs": 0.015,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.099,
+          "maxMs": 0.099,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.02,
+          "maxMs": 0.02,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/11-eml-suspicious-replyto.txt",
+      "bytes": 473,
+      "fileType": "text",
+      "totalMedianMs": 0.966,
+      "totalMaxMs": 0.966,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.081,
+          "maxMs": 0.081,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.082,
+          "maxMs": 0.082,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.058,
+          "maxMs": 0.058,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.019,
+          "maxMs": 0.019,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.037,
+          "maxMs": 0.037,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.075,
+          "maxMs": 0.075,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.024,
+          "maxMs": 0.024,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.031,
+          "maxMs": 0.031,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.036,
+          "maxMs": 0.036,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/12-zalgo.txt",
+      "bytes": 109,
+      "fileType": "text",
+      "totalMedianMs": 1.021,
+      "totalMaxMs": 1.021,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.02,
+          "maxMs": 0.02,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.06,
+          "maxMs": 0.06,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.399,
+          "maxMs": 0.399,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.041,
+          "maxMs": 0.041,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.023,
+          "maxMs": 0.023,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/13-md-image-exfil.txt",
+      "bytes": 849,
+      "fileType": "text",
+      "totalMedianMs": 1.707,
+      "totalMaxMs": 1.707,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.175,
+          "maxMs": 0.175,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.144,
+          "maxMs": 0.144,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.071,
+          "maxMs": 0.071,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.032,
+          "maxMs": 0.032,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.056,
+          "maxMs": 0.056,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.132,
+          "maxMs": 0.132,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.044,
+          "maxMs": 0.044,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.034,
+          "maxMs": 0.034,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.063,
+          "maxMs": 0.063,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/14-chatml-role-injection.txt",
+      "bytes": 85,
+      "fileType": "text",
+      "totalMedianMs": 0.313,
+      "totalMaxMs": 0.313,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.015,
+          "maxMs": 0.015,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.05,
+          "maxMs": 0.05,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/15-system-bracket-injection.txt",
+      "bytes": 60,
+      "fileType": "text",
+      "totalMedianMs": 0.312,
+      "totalMaxMs": 0.312,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.029,
+          "maxMs": 0.029,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/16-system-xml-tag-injection.txt",
+      "bytes": 65,
+      "fileType": "text",
+      "totalMedianMs": 0.256,
+      "totalMaxMs": 0.256,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.025,
+          "maxMs": 0.025,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/17-heading-system-impersonation.txt",
+      "bytes": 473,
+      "fileType": "text",
+      "totalMedianMs": 3.247,
+      "totalMaxMs": 3.247,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 2.102,
+          "maxMs": 2.102,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.037,
+          "maxMs": 0.037,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.193,
+          "maxMs": 0.193,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.023,
+          "maxMs": 0.023,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.038,
+          "maxMs": 0.038,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.081,
+          "maxMs": 0.081,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.027,
+          "maxMs": 0.027,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.098,
+          "maxMs": 0.098,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.084,
+          "maxMs": 0.084,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/18-heading-assistant-3pack.txt",
+      "bytes": 400,
+      "fileType": "text",
+      "totalMedianMs": 0.74,
+      "totalMaxMs": 0.74,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.032,
+          "maxMs": 0.032,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.033,
+          "maxMs": 0.033,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.017,
+          "maxMs": 0.017,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.029,
+          "maxMs": 0.029,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.064,
+          "maxMs": 0.064,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.021,
+          "maxMs": 0.021,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.132,
+          "maxMs": 0.132,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.017,
+          "maxMs": 0.017,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_dde_calc.csv",
+      "bytes": 38,
+      "fileType": "csv",
+      "totalMedianMs": 0.916,
+      "totalMaxMs": 0.916,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.038,
+          "maxMs": 0.038,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.656,
+          "maxMs": 0.656,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_fullwidth_equals.csv",
+      "bytes": 35,
+      "fileType": "csv",
+      "totalMedianMs": 0.536,
+      "totalMaxMs": 0.536,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.059,
+          "maxMs": 0.059,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.083,
+          "maxMs": 0.083,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "shadowSuspiciousNfkc",
+          "medianMs": 0.042,
+          "maxMs": 0.042,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.019,
+          "maxMs": 0.019,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_hyperlink_phish.csv",
+      "bytes": 98,
+      "fileType": "csv",
+      "totalMedianMs": 0.284,
+      "totalMaxMs": 0.284,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.029,
+          "maxMs": 0.029,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.033,
+          "maxMs": 0.033,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.012,
+          "maxMs": 0.012,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.049,
+          "maxMs": 0.049,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_importxml_gsheets.csv",
+      "bytes": 75,
+      "fileType": "csv",
+      "totalMedianMs": 2.335,
+      "totalMaxMs": 2.335,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.02,
+          "maxMs": 0.02,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_powershell_b64.csv",
+      "bytes": 134,
+      "fileType": "csv",
+      "totalMedianMs": 0.397,
+      "totalMaxMs": 0.397,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.027,
+          "maxMs": 0.027,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.167,
+          "maxMs": 0.167,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.024,
+          "maxMs": 0.024,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.016,
+          "maxMs": 0.016,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_tab_prefix_bypass.csv",
+      "bytes": 103,
+      "fileType": "csv",
+      "totalMedianMs": 0.184,
+      "totalMaxMs": 0.184,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.025,
+          "maxMs": 0.025,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.021,
+          "maxMs": 0.021,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/csv_formula_webservice_exfil.csv",
+      "bytes": 72,
+      "fileType": "csv",
+      "totalMedianMs": 0.127,
+      "totalMaxMs": 0.127,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "attacks/index.json",
+      "bytes": 16868,
+      "fileType": "text",
+      "totalMedianMs": 14.265,
+      "totalMaxMs": 14.265,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.565,
+          "maxMs": 0.565,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 3.629,
+          "maxMs": 3.629,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.375,
+          "maxMs": 0.375,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.111,
+          "maxMs": 0.111,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.547,
+          "maxMs": 0.547,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.564,
+          "maxMs": 0.564,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.055,
+          "maxMs": 0.055,
+          "calls": 1
+        },
+        {
+          "name": "shadowSuspiciousNfkc",
+          "medianMs": 0.886,
+          "maxMs": 0.886,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.756,
+          "maxMs": 0.756,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 1.42,
+          "maxMs": 1.42,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "benign/csv_benign_accounting_negatives.csv",
+      "bytes": 100,
+      "fileType": "csv",
+      "totalMedianMs": 0.137,
+      "totalMaxMs": 0.137,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.018,
+          "maxMs": 0.018,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.013,
+          "maxMs": 0.013,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "benign/csv_benign_japanese_shift_jis.csv",
+      "bytes": 46,
+      "fileType": "csv",
+      "totalMedianMs": 0.345,
+      "totalMaxMs": 0.345,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.189,
+          "maxMs": 0.189,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.003,
+          "maxMs": 0.003,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "benign/csv_benign_sum_formulas.csv",
+      "bytes": 104,
+      "fileType": "csv",
+      "totalMedianMs": 0.14,
+      "totalMaxMs": 0.14,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.002,
+          "maxMs": 0.002,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.017,
+          "maxMs": 0.017,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.006,
+          "maxMs": 0.006,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.007,
+          "maxMs": 0.007,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "benign/csv_benign_url_in_cell.csv",
+      "bytes": 76,
+      "fileType": "csv",
+      "totalMedianMs": 0.109,
+      "totalMaxMs": 0.109,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.008,
+          "maxMs": 0.008,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "formulaInjection",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.005,
+          "maxMs": 0.005,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.004,
+          "maxMs": 0.004,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.011,
+          "maxMs": 0.011,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.001,
+          "maxMs": 0.001,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "benign/index.json",
+      "bytes": 2724,
+      "fileType": "text",
+      "totalMedianMs": 1.342,
+      "totalMaxMs": 1.342,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 0.113,
+          "maxMs": 0.113,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 0.221,
+          "maxMs": 0.221,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 0.026,
+          "maxMs": 0.026,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 0.009,
+          "maxMs": 0.009,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 0.11,
+          "maxMs": 0.11,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 0.079,
+          "maxMs": 0.079,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 0.014,
+          "maxMs": 0.014,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 0.098,
+          "maxMs": 0.098,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 0.01,
+          "maxMs": 0.01,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "synthetic/plain-1mb.txt",
+      "bytes": 1048684,
+      "fileType": "text",
+      "totalMedianMs": 473.357,
+      "totalMaxMs": 473.357,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 49.328,
+          "maxMs": 49.328,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 102.654,
+          "maxMs": 102.654,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 9.834,
+          "maxMs": 9.834,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 2.873,
+          "maxMs": 2.873,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 25.804,
+          "maxMs": 25.804,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 17.413,
+          "maxMs": 17.413,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 3.193,
+          "maxMs": 3.193,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 18.957,
+          "maxMs": 18.957,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 4.135,
+          "maxMs": 4.135,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "synthetic/plain-10mb.txt",
+      "bytes": 10485872,
+      "fileType": "text",
+      "totalMedianMs": 5044.758,
+      "totalMaxMs": 5044.758,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 585.073,
+          "maxMs": 585.073,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 1094.636,
+          "maxMs": 1094.636,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 98.338,
+          "maxMs": 98.338,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 35.232,
+          "maxMs": 35.232,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 270.455,
+          "maxMs": 270.455,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 198.248,
+          "maxMs": 198.248,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 31.73,
+          "maxMs": 31.73,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 182.295,
+          "maxMs": 182.295,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 41.295,
+          "maxMs": 41.295,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "synthetic/plain-50mb.txt",
+      "bytes": 52428982,
+      "fileType": "text",
+      "totalMedianMs": 28822.202,
+      "totalMaxMs": 28822.202,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 4247.181,
+          "maxMs": 4247.181,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 7280.055,
+          "maxMs": 7280.055,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 507.507,
+          "maxMs": 507.507,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 176.925,
+          "maxMs": 176.925,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 1348.889,
+          "maxMs": 1348.889,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 994.431,
+          "maxMs": 994.431,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 160.624,
+          "maxMs": 160.624,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 925.56,
+          "maxMs": 925.56,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 206.475,
+          "maxMs": 206.475,
+          "calls": 1
+        }
+      ]
+    },
+    {
+      "label": "synthetic/markdown-10k.md",
+      "bytes": 963346,
+      "fileType": "markdown",
+      "totalMedianMs": 564.002,
+      "totalMaxMs": 564.002,
+      "detectors": [
+        {
+          "name": "buildInvisibleStrippedShadow",
+          "medianMs": 39.923,
+          "maxMs": 39.923,
+          "calls": 1
+        },
+        {
+          "name": "buildNfkcShadow",
+          "medianMs": 85.087,
+          "maxMs": 85.087,
+          "calls": 1
+        },
+        {
+          "name": "combiningChars",
+          "medianMs": 9.027,
+          "maxMs": 9.027,
+          "calls": 1
+        },
+        {
+          "name": "controlChars",
+          "medianMs": 2.699,
+          "maxMs": 2.699,
+          "calls": 1
+        },
+        {
+          "name": "hiddenElements",
+          "medianMs": 91.145,
+          "maxMs": 91.145,
+          "calls": 1
+        },
+        {
+          "name": "homoglyphs",
+          "medianMs": 23.757,
+          "maxMs": 23.757,
+          "calls": 1
+        },
+        {
+          "name": "invisibleUnicode",
+          "medianMs": 16.226,
+          "maxMs": 16.226,
+          "calls": 1
+        },
+        {
+          "name": "markdownExfil",
+          "medianMs": 2.176,
+          "maxMs": 2.176,
+          "calls": 1
+        },
+        {
+          "name": "mathBypass",
+          "medianMs": 2.912,
+          "maxMs": 2.912,
+          "calls": 1
+        },
+        {
+          "name": "suspiciousPatterns",
+          "medianMs": 18.684,
+          "maxMs": 18.684,
+          "calls": 1
+        },
+        {
+          "name": "variationSelectors",
+          "medianMs": 3.781,
+          "maxMs": 3.781,
+          "calls": 1
+        }
+      ]
+    }
+  ],
+  "thresholdFailures": [],
+  "regressionFailures": []
+}

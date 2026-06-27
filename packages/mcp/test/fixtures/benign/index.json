@@ -50,5 +50,13 @@
   {
     "file": "archive_benign_image_bundle.zip",
     "notes": "Multiple legitimate image entries, no findings expected."
+  },
+  {
+    "file": "benign_docx_legit_local_dotm.docx",
+    "notes": "v1.18.0 Follina FP-guard — word/settings.xml has <w:attachedTemplate r:id> but the .rels Target is an in-package relative path (no scheme). docx-attached-template-remote MUST NOT surface."
+  },
+  {
+    "file": "benign_docx_customxml_sharepoint.docx",
+    "notes": "v1.18.0 Follina FP-guard — customXml/item1.xml carries SharePoint documentManagement metadata (DepartmentCode / ClientRef / DocStatus). No instruction-shape text — docx-customxml-instruction MUST NOT surface."
   }
 ]

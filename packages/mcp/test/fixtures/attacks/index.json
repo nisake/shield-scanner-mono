@@ -144,6 +144,22 @@
     "currentlyDetected": true
   },
   {
+    "file": "20-trusted-host-spoof-subdomain.txt",
+    "expectCategories": [
+      "hiddenHtml"
+    ],
+    "notes": "v1.19.0 Theme A1: subdomain-spoof attack against the new trusted-allowlist (Tier 6). Attacker-controlled hostnames whose tail looks like a trusted host (jsdelivr.net.evil.com / stripe.com.attacker.org / login.auth0.com.evil.net / etc.) MUST NOT short-circuit on the allowlist — the isTrustedAllowlistHost check uses `h === t || h.endsWith('.' + t)` so these fall through to the unknown-host tier and fire as danger (strong) or warning (weak).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "21-vs-in-url-query-smuggling.txt",
+    "expectCategories": [
+      "invisibleUnicode"
+    ],
+    "notes": "v1.19.0 A2: Variation Selector U+FE0F embedded inside an http(s) URL query value (ASCII smuggling). detector.js applyContextFlags() retags the VS finding with technique='url-query-variation-selector' and upgrades severity to danger.",
+    "currentlyDetected": true
+  },
+  {
     "file": "csv_formula_dde_calc.csv",
     "expectCategories": [
       "suspiciousPatterns"
@@ -403,6 +419,186 @@
     ],
     "category": "archive-fold",
     "notes": "AR-08 — nested XLSM with vbaProject.bin; inner MV-04 findings should fold into hiddenHtml via enrichFindingsLocation.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "docx_attached_template_remote.docx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "docx-follina",
+    "notes": "v1.18.0 Follina — word/settings.xml <w:attachedTemplate r:id> resolves through word/_rels/settings.xml.rels to a remote https Target. Surfaces docx-attached-template-remote with meta.templateUrl (CVE-2022-30190 / CVE-2023-36884 family).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "docx_websettings_external_frame.docx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "docx-follina",
+    "notes": "v1.18.0 Follina — word/webSettings.xml <w:frame w:src> points at a remote http(s) target. Surfaces docx-websettings-external-load.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "docx_customxml_item_instruction.docx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "docx-follina",
+    "notes": "v1.18.0 Follina — customXml/item1.xml carries instruction-shaped text. Surfaces docx-customxml-instruction (warning).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "docx_embedded_ole_cfb.docx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "docx-follina",
+    "notes": "v1.18.0 Follina — word/embeddings/oleObject1.bin starts with CFB magic D0 CF 11 E0. Surfaces office-embedded-ole-cfb (shared kebab id with PPTX).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "pptx_attached_template_remote.pptx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "pptx-follina",
+    "notes": "v1.18.0 Follina — ppt/_rels/presentation.xml.rels carries a Relationship Type=slideMaster with TargetMode=External + remote https Target. Surfaces pptx-attached-template-remote with meta.templateUrl.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "pptx_embedded_ole_equation.pptx",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "pptx-follina",
+    "notes": "v1.18.0 Follina — ppt/embeddings/oleObject1.bin (Equation Editor shape) starts with CFB magic. Surfaces office-embedded-ole-cfb (kebab id shared with DOCX).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "25-base64-instruction.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "encoded-payload",
+    "notes": "v1.19.0 D1 — Base64-encoded 'Ignore all previous instructions...' payload. Surfaces encoded-base64-instruction (suspiciousPatterns fold).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "26-hex-instruction.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "encoded-payload",
+    "notes": "v1.19.0 D1 — Hex-encoded instruction phrase. Surfaces encoded-hex-instruction.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "27-punycode-host.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "encoded-payload",
+    "notes": "v1.19.0 D1 — xn--pypl-53dc.com decodes to a Cyrillic/Latin mixed-script homograph of paypal.com. Surfaces punycode-host-homograph.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "28-html-entity-instruction.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "encoded-payload",
+    "notes": "v1.19.0 D1 — HTML numeric character references (&#xHH;) reconstruct the 'Ignore previous instructions' phrase. Surfaces encoded-html-entity-instruction.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "29-multi-layer-obfuscation.txt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "encoded-payload",
+    "notes": "v1.19.0 D1 — Base64 wrapping a ZWSP-obfuscated 'Ignore all previous instructions...' phrase. Surfaces multi-layer-encoded-payload (layerCount=2).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odp_notes_prompt_injection.odp",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odp",
+    "notes": "v1.20.0 T3-ODP — ODP speaker note carries an instruction-shaped prompt-injection payload. Surfaces odp-notes-prompt-injection.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odp_slide_transition_macro.odp",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odp",
+    "notes": "v1.20.0 T3-ODP — ODP slide transition wired to vnd.sun.star.script: macro + javascript: sound href. Surfaces odp-slide-transition-macro.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odp_embedded_object_external.odp",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odp",
+    "notes": "v1.20.0 T3-ODP — ODP draw:object with remote xlink:href + settings.xml external reference. Surfaces odp-embedded-object-external.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odt_office_settings_macro.odt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odt",
+    "notes": "v1.20.0 T1-ODT — settings.xml carries MacroSecurityLevel=0 / LoadReadonly=true config-item flags. Surfaces odt-office-settings-macro (severity=danger, R13 fold).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odt_meta_prompt_injection.odt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odt",
+    "notes": "v1.20.0 T1-ODT — meta.xml dc:title + meta:user-defined carry instruction-shaped text. Surfaces odt-meta-prompt-injection.",
+    "currentlyDetected": true
+  },
+  {
+    "file": "odt_external_event_listener.odt",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "odt",
+    "notes": "v1.20.0 T1-ODT — content.xml script:event-listener xlink:href points at https://attacker.example/. Surfaces odt-external-event-listener (severity=danger).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "ods_formula_injection.ods",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "ods",
+    "notes": "v1.20.0 T2-ODS — content.xml carries <table:table-cell table:formula='of:=HYPERLINK(...)' /> + IMPORTXML + leading-=cmd shell formulas. Surfaces ods-formula-injection (via shared CSV/XLSX detector + ODS-namespaced kebab restamp).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "ods_external_dde_link.ods",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "ods",
+    "notes": "v1.20.0 T2-ODS — content.xml DDE('cmd';'topic';'item') formula + settings.xml config-item referencing 'powershell -enc'. Surfaces ods-external-dde-link from both formula and settings paths (severity=danger).",
+    "currentlyDetected": true
+  },
+  {
+    "file": "ods_hidden_sheet_instruction.ods",
+    "expectCategories": [
+      "suspiciousPatterns"
+    ],
+    "category": "ods",
+    "notes": "v1.20.0 T2-ODS — table:display='false' (Calc hidden sheet) carrying instruction-shaped cell body. Surfaces ods-hidden-sheet-instruction (severity=danger, isHidden=true).",
     "currentlyDetected": true
   }
 ]

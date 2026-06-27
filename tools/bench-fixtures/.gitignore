@@ -1,0 +1,7 @@
+# v1.18.0 — synthetic bench fixtures are generated at runtime by
+# tools/gen-bench-fixtures.mjs and must NOT be committed. They are large
+# (50 MB plain text + 10000-line markdown) and would bloat the repo
+# without adding any safety value. The bench harness regenerates them
+# deterministically (xorshift32 seed) so the runtime cost is negligible.
+*
+!.gitignore

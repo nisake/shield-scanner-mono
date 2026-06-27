@@ -1,0 +1,104 @@
+# v1.20.0 T5-BENCH-CI — detector benchmark CI artifact + regression gate.
+#
+# Runs tools/bench-detector.mjs on every PR + push to main, then:
+#   1. Generates a markdown summary via tools/bench-ci-summary.mjs (artifact).
+#   2. Runs the standalone regression gate (tools/bench-regression-gate.mjs)
+#      against a cached baseline from the previous main-branch run, when one
+#      is available. First runs and PRs where the cache is empty soft-pass.
+#   3. Uploads bench-latest.json + the markdown summary as a 30-day artifact
+#      so reviewers can download and diff between runs.
+#
+# Does not touch dist/ or fixtures. Pure additive infra change; no R12/R13
+# guardrail surface.
+
+name: bench-detector
+
+on:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "tools/bench-detector.mjs"
+      - "tools/bench-ci-summary.mjs"
+      - "tools/bench-regression-gate.mjs"
+      - "tools/bench-threshold.json"
+      - "tools/gen-bench-fixtures.mjs"
+      - ".github/workflows/bench-detector.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: detector benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Pin to a fixed epoch so bench-latest.json is byte-reproducible across
+      # CI runs that share the same code. The harness uses this for the
+      # `sourceDateEpoch` field only — it does not affect detector timing.
+      SOURCE_DATE_EPOCH: "1700000000"
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: install deps
+        run: npm ci
+
+      # Restore the previous main-branch bench-latest.json (if any) as a
+      # baseline for the regression gate. First-ever run + PRs from forks
+      # that never produced a cache will silently miss this step — that is
+      # by design, the gate soft-passes when no baseline is present.
+      - name: restore baseline bench cache
+        id: baseline-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: tools/bench-baseline.json
+          key: bench-baseline-${{ runner.os }}
+
+      - name: run benchmark
+        run: node tools/bench-detector.mjs --iters=3
+
+      - name: generate markdown summary
+        run: node tools/bench-ci-summary.mjs --out=tools/bench-summary.md
+
+      - name: regression gate (vs cached baseline)
+        run: |
+          if [ -f tools/bench-baseline.json ]; then
+            node tools/bench-regression-gate.mjs \
+              --current=tools/bench-latest.json \
+              --baseline=tools/bench-baseline.json
+          else
+            echo "no cached baseline yet — soft-pass."
+          fi
+
+      - name: upload bench artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-detector-${{ github.run_id }}
+          path: |
+            tools/bench-latest.json
+            tools/bench-summary.md
+          retention-days: 30
+
+      # Refresh the baseline cache on every push to main so subsequent PRs
+      # diff against the latest main-branch numbers. Skipped on PR runs.
+      - name: refresh baseline cache (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: cp tools/bench-latest.json tools/bench-baseline.json
+
+      - name: save baseline cache (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: tools/bench-baseline.json
+          key: bench-baseline-${{ runner.os }}

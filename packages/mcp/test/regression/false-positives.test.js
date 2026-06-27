@@ -52,6 +52,14 @@ const BASELINE_WARNINGS = {
   // (priority.js), so topFindings stays empty — the warning shows up in the
   // detail list but never lands on the banner. dangerCount remains 0.
   "benign_markdown_heading_blog.txt": 2,
+  // v1.19.0 Theme A1: trusted-allowlist (Tier 6) FP safety net. Weak-key URLs
+  // on organisation-controlled trusted hosts (stripe / auth0 / sendgrid /
+  // mailgun / ...) surface as severity 'info' (md-exfil-allowlist-suppressed)
+  // which is NOT counted in warningCount and does NOT surface on topFindings.
+  // Strong-key downgrade (md-exfil-allowlist-downgraded -> warning) is NOT
+  // exercised here (warning would land on the topFindings banner); strong-key
+  // assertions live in regression/allowed-host-allowlist.test.js instead.
+  "benign_trusted_allowlist_full.txt": 0,
 };
 
 // Lightweight fileType inference: HTML wins on raw tags, markdown on image

@@ -53,6 +53,17 @@ import { parseImage, _imgRedactDecodedFindings } from "./parsers-web/image.js";
 import { parseXlsx } from "./parsers-web/xlsx.js";
 import { parseCsv } from "./parsers-web/csv.js";
 import { parseArchiveBuffer } from "./parsers-web/archive.js";
+// v1.19.0 B2: RTF parser. Mirrors MCP packages/mcp/server/parsers/rtf.js with
+// byte-identical kebab ids / severities / meta keys for parity.
+import { parseRtf } from "./parsers-web/rtf.js";
+// v1.19.0 B3: Jupyter notebook parser. Mirrors MCP packages/mcp/server/parsers
+// /ipynb.js with byte-identical kebab ids / severities / meta keys for parity.
+import { parseIpynb } from "./parsers-web/ipynb.js";
+// v1.20.0 T3-ODP: OpenDocument Presentation parser. Mirrors MCP
+// packages/mcp/server/parsers/odp.js with byte-identical kebab ids /
+// severities / meta keys for parity. Imported last so concurrent T1 / T2
+// ODF parser additions land on independent lines.
+import { parseOdp } from "./parsers-web/odp.js";
 
 // Format a finding's technique label, substituting meta fields into the i18n
 // placeholder if present. Detectors emit kebab-case technique ids + a numeric
@@ -123,7 +134,7 @@ function handleFile(file) {
   // merge below. The text-mode path (readAsText) bypasses that merge and
   // would drop them. 'xlsx' is binary by nature (zip container).
   const allowedText = ["txt","md","markdown","mdc","cursorrules","json","html","htm","xml","svg"];
-  const allowedBinary = ["docx","pdf","pptx","xlsx","csv","zip","jpg","jpeg","png","webp","gif","tiff","tif"];
+  const allowedBinary = ["docx","pdf","pptx","xlsx","csv","zip","rtf","ipynb","jpg","jpeg","png","webp","gif","tiff","tif","odp","odt","ods"];
   if (!allowedText.includes(ext) && !allowedBinary.includes(ext)) {
     alert(currentLang === "ja" ? "このファイル形式には対応していません" : "Unsupported file format");
     return;
@@ -147,6 +158,18 @@ function handleFile(file) {
         else if (ext === "xlsx") extracted = await parseXlsx(buffer);
         else if (ext === "csv") extracted = await parseCsv(buffer);
         else if (ext === "zip") extracted = await parseArchiveBuffer(buffer, { depth: 0 });
+        else if (ext === "rtf") extracted = await parseRtf(buffer);
+        else if (ext === "ipynb") extracted = await parseIpynb(buffer);
+        // v1.20.0 T3-ODP — appended last so concurrent T1 / T2 ODF dispatch
+        // branches stay merge-clean.
+        else if (ext === "odp") extracted = await parseOdp(buffer);
+        // v1.20.0 T1-ODT — appended after odp so the ODF cluster (odt/ods/odp)
+        // sits together at the tail of the ext switch and the dispatch order
+        // is deterministic across parallel agent merges.
+        else if (ext === "odt") extracted = await _parseOdtForHandleFile(buffer);
+        // v1.20.0 T2-ODS — appended after odt so the ODF cluster
+        // (odp/odt/ods) sits together at the tail of the ext switch.
+        else if (ext === "ods") extracted = await _parseOdsForHandleFile(buffer);
         else if (["jpg","jpeg","png","webp","gif","tiff","tif"].includes(ext))
           extracted = await parseImage(buffer, ext);
 
@@ -701,3 +724,75 @@ globalThis.lastScanResult = null;
 globalThis.lastRawContent = "";
 globalThis.lastFileName = "";
 globalThis.lastFileType = "";
+
+// --- v1.19.0 C2: DiffPreview component wiring (S17 successor) ---
+// The DiffPreview is a side-by-side virtualized renderer that lives in
+// its own component file. We expose the class on globalThis so any
+// future UI surface (e.g. a future right-panel or a popout window) can
+// mount it without re-importing. The existing diff-section block in
+// displayResults() above is preserved (so the test-s17-diff.mjs API
+// contract is unchanged); the new component is purely additive.
+import { DiffPreview } from "./components/DiffPreview.js";
+globalThis.DiffPreview = DiffPreview;
+
+// =============================================================
+//  v1.19.0 C3 — BatchExport wire-in (end-of-file, no mid-file edits)
+// =============================================================
+// Surfaces JSON / Markdown / PDF export buttons under the bulk-summary
+// #actions row whenever displayMultiResults() paints. We wrap the
+// globalThis.displayMultiResults binding installed above so bulk-scan.js
+// itself stays untouched (C2/C3 collision-free).
+//
+// PDF builder uses a hand-rolled minimal PDF 1.4 emitter — pdf-lib was
+// the natural choice but its esbuild footprint (~820 KiB) blows the
+// 900 KiB dist-budget gate. See packages/web/src/components/BatchExport.js
+// for the full rationale.
+import { mountBatchExportButtons } from "./components/BatchExport.js";
+
+let __c3_lastBulkResults = null;
+function __c3_setBulkResultsSnapshot(results) {
+  __c3_lastBulkResults = Array.isArray(results) ? results.slice() : null;
+}
+function __c3_getBulkResultsSnapshot() {
+  return __c3_lastBulkResults;
+}
+globalThis.__shieldSetBulkResults = __c3_setBulkResultsSnapshot;
+globalThis.__shieldGetBulkResults = __c3_getBulkResultsSnapshot;
+
+const __c3_origDisplayMulti = globalThis.displayMultiResults;
+if (typeof __c3_origDisplayMulti === "function") {
+  globalThis.displayMultiResults = function (results) {
+    __c3_setBulkResultsSnapshot(results);
+    const ret = __c3_origDisplayMulti.apply(this, arguments);
+    try {
+      const actionsEl = document.getElementById("actions");
+      if (actionsEl) {
+        mountBatchExportButtons(actionsEl, __c3_getBulkResultsSnapshot);
+      }
+    } catch (_e) {
+      // Non-fatal: export buttons are an enhancement, never a blocker.
+    }
+    return ret;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// v1.20.0 T1-ODT: OpenDocument Text parser binding (Web).
+//
+// The inner handleFile() switch (above) routes ext === "odt" through
+// _parseOdtForHandleFile. The import lives here at file-end (rather than in
+// the top import block) so the ODF cluster (T1-ODT / T2 / T3-ODP) lands on
+// independent lines and concurrent parser additions stay merge-clean.
+// All findings fold into category:'suspiciousPatterns' (R13 5-key invariant).
+// ---------------------------------------------------------------------------
+import { parseOdt as _parseOdtForHandleFile } from "./parsers-web/odt.js";
+
+// ---------------------------------------------------------------------------
+// v1.20.0 T2-ODS: OpenDocument Spreadsheet parser binding (Web).
+//
+// The inner handleFile() switch (above) routes ext === "ods" through
+// _parseOdsForHandleFile. Import lives here at file-end so the ODF cluster
+// (T1-ODT / T2-ODS / T3-ODP) lands on independent lines. All findings fold
+// into category:'suspiciousPatterns' (R13 5-key invariant).
+// ---------------------------------------------------------------------------
+import { parseOds as _parseOdsForHandleFile } from "./parsers-web/ods.js";

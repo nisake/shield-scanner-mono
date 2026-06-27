@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "shield-scanner-mcp",
   "display_name": "Shield Scanner",
-  "version": "1.4.0",
+  "version": "1.19.0",
   "description": "プロンプトインジェクション検知MCP — AIに渡す前のテキスト・ファイル・URL・メールを事前スキャン",
   "author": {
     "name": "NISAKE"
@@ -40,6 +40,10 @@
     {
       "name": "sanitize_file",
       "description": "Create a sanitized copy of a file with detected threats removed"
+    },
+    {
+      "name": "scan_mcp_descriptor",
+      "description": "Scan MCP tool descriptors (mcp.json / tools-list response) for poisoning, rug-pull, and shadow-tool collision (CVE-2025-54136 / OWASP MCP03)"
     }
   ],
   "compatibility": {
