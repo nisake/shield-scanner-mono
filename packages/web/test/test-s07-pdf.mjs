@@ -249,7 +249,7 @@ add('45 S7 Stage B: binary .exe attachment -> filename-only warning, no parse', 
   try {
     const out = await parsePdf(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
     const hit = (out.hiddenFindings || []).find(
-      (f) => f.element === 'PDF Attachment' && f.technique === 'Embedded binary attachment',
+      (f) => f.element === 'PDF Attachment' && f.technique === 'pdf-embedded-binary-attachment',
     );
     if (!hit) {
       throw new Error(`no PDF Attachment warning. findings=${JSON.stringify(out.hiddenFindings)}`);
@@ -257,6 +257,10 @@ add('45 S7 Stage B: binary .exe attachment -> filename-only warning, no parse', 
     if (hit.severity !== 'warning') throw new Error(`severity != warning: ${hit.severity}`);
     if (hit.contextLocation !== 'Attachment payload.exe') {
       throw new Error(`contextLocation mismatch: ${hit.contextLocation}`);
+    }
+    // v1.17.0 (T2): meta.ext carries the rejected extension token.
+    if (!hit.meta || hit.meta.ext !== 'exe') {
+      throw new Error(`meta.ext mismatch: ${JSON.stringify(hit.meta)}`);
     }
   } finally { restore(); }
 });
@@ -432,7 +436,7 @@ add('54 S7 Stage B: oversize (>5MB) attachment -> single warning, Stage B not in
       throw new Error(`body unexpectedly contains attachment header. text=${JSON.stringify(out.text).slice(0, 300)}`);
     }
     const oversizeHits = (out.hiddenFindings || []).filter(
-      (f) => f.element === 'PDF Attachment' && f.technique === 'Oversize attachment skipped (> 5MB)',
+      (f) => f.element === 'PDF Attachment' && f.technique === 'pdf-oversize-attachment',
     );
     if (oversizeHits.length !== 1) {
       throw new Error(`expected 1 oversize finding, got ${oversizeHits.length}: ${JSON.stringify(oversizeHits)}`);
@@ -441,6 +445,13 @@ add('54 S7 Stage B: oversize (>5MB) attachment -> single warning, Stage B not in
     if (hit.severity !== 'warning') throw new Error(`severity != warning: ${hit.severity}`);
     if (hit.contextLocation !== 'Attachment huge.txt') {
       throw new Error(`contextLocation mismatch: ${hit.contextLocation}`);
+    }
+    // v1.17.0 (T2): meta.maxBytes / actualBytes are numeric module constants.
+    if (!hit.meta || typeof hit.meta.maxBytes !== 'number' || typeof hit.meta.actualBytes !== 'number') {
+      throw new Error(`meta numeric fields missing: ${JSON.stringify(hit.meta)}`);
+    }
+    if (hit.meta.maxBytes !== 5 * 1024 * 1024) {
+      throw new Error(`meta.maxBytes mismatch: ${hit.meta.maxBytes}`);
     }
   } finally { restore(); }
 });
@@ -474,11 +485,15 @@ add('55 PDF-DEEP-01: catalog getJSActions() emits jsaction header + warning', as
       throw new Error('missing jsaction body in text');
     }
     const hit = (out.hiddenFindings || []).find(
-      (f) => f.technique === 'PDF embeds JavaScript actions',
+      (f) => f.technique === 'pdf-embeds-javascript-actions',
     );
     if (!hit) throw new Error('no jsaction warning hoisted');
     if (hit.severity !== 'warning') throw new Error('severity mismatch: ' + hit.severity);
     if (hit.contextLocation !== 'Catalog') throw new Error('contextLocation mismatch: ' + hit.contextLocation);
+    // v1.17.0 (T2): meta.count = number of distinct action names with body.
+    if (!hit.meta || typeof hit.meta.count !== 'number' || hit.meta.count !== 1) {
+      throw new Error(`meta.count mismatch: ${JSON.stringify(hit.meta)}`);
+    }
   } finally { restore(); }
 });
 
@@ -616,7 +631,7 @@ add('60 PDF Stage B: oversize attachment filename with RLO is sanitized in conte
   try {
     const out = await parsePdf(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
     const hit = (out.hiddenFindings || []).find(
-      (f) => f.technique === 'Oversize attachment skipped (> 5MB)',
+      (f) => f.technique === 'pdf-oversize-attachment',
     );
     if (!hit) throw new Error('no oversize hit');
     if (/‮/.test(hit.contextLocation)) throw new Error('RLO not stripped: ' + hit.contextLocation);
@@ -635,7 +650,7 @@ add('61 PDF Stage B: 0-byte txt attachment surfaces as "Empty attachment" warnin
   try {
     const out = await parsePdf(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
     const hit = (out.hiddenFindings || []).find(
-      (f) => f.technique === 'Empty attachment',
+      (f) => f.technique === 'pdf-empty-attachment',
     );
     if (!hit) throw new Error('no empty-attachment finding: ' + JSON.stringify(out.hiddenFindings));
     if (hit.severity !== 'warning') throw new Error('severity mismatch: ' + hit.severity);

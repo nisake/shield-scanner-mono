@@ -175,11 +175,12 @@ async function parseCsv(buffer) {
   if (byteLen > CSV_MAX_BYTES) {
     hiddenFindings.push({
       element: 'CSV',
-      technique: `CSV exceeds scan limits — file > ${CSV_MAX_BYTES} bytes (partial scan)`,
+      technique: 'csv-scan-limit-bytes',
       content: `(${byteLen} bytes)`,
       severity: 'warning',
       category: 'hiddenHtml',
       contextLocation: 'CSV',
+      meta: { maxBytes: CSV_MAX_BYTES, byteLen },
     });
     // Continue with a truncated buffer view.
   }
@@ -193,11 +194,12 @@ async function parseCsv(buffer) {
   if (decoded.note) {
     hiddenFindings.push({
       element: 'CSV encoding',
-      technique: decoded.note,
+      technique: 'csv-encoding-fallback',
       content: `(decoded as ${decoded.encoding})`,
       severity: 'warning',
       category: 'hiddenHtml',
       contextLocation: 'CSV',
+      meta: { encoding: decoded.encoding, note: decoded.note },
     });
   }
 
@@ -205,11 +207,12 @@ async function parseCsv(buffer) {
   if (cappedAt >= 0) {
     hiddenFindings.push({
       element: 'CSV',
-      technique: `CSV exceeds scan limits — rows > ${CSV_MAX_ROWS} (partial scan)`,
+      technique: 'csv-scan-limit-rows',
       content: `(stopped at row ${cappedAt})`,
       severity: 'warning',
       category: 'hiddenHtml',
       contextLocation: 'CSV',
+      meta: { maxRows: CSV_MAX_ROWS, cappedAt },
     });
   }
 

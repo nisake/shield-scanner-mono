@@ -257,7 +257,7 @@ describe("S13 archive: AR-08 — nested entry findings", () => {
     expect(r.archiveSummary.scanned).toBeGreaterThanOrEqual(1);
     const mv04 = findingsAll(r).filter(
       (f) =>
-        /vbaProject|VBA macro/i.test(f.technique || "") &&
+        /vba-macro-project/i.test(f.technique || "") &&
         typeof f.contextLocation === "string" &&
         /ZIP entry:/i.test(f.contextLocation),
     );

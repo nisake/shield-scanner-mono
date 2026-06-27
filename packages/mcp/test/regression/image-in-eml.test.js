@@ -357,7 +357,7 @@ describe("S12-XR-01: PDF DOES recurse into image attachments (parity with EML)",
     const pdfBuf = buildPdfWithJpegAttachment(oversize, "huge.jpg");
     const r = await parsePdfBuffer(pdfBuf, { depth: 0 });
     const oversizeFinding = r.extraFindings.find(
-      (f) => /Oversize attachment skipped/.test(f.technique || "")
+      (f) => f.technique === "pdf-oversize-attachment"
     );
     expect(oversizeFinding, "5MB cap should fire a warning extraFinding").toBeTruthy();
     expect(oversizeFinding.contextLocation).toBe("Attachment huge.jpg");
@@ -503,9 +503,7 @@ describe("S12-XR-02 cross-format: DOCX/PPTX recurse into embedded images", () =>
       const buf = await buildDocxWithImage(big, "huge.jpeg");
       const res = await parseDocxBuffer(buf);
       const oversize = res.extraFindings.find(
-        (f) =>
-          typeof f.technique === "string" &&
-          f.technique.startsWith("Oversize embedded image skipped")
+        (f) => f.technique === "oversize-embedded-image"
       );
       expect(oversize).toBeTruthy();
       expect(oversize.contextLocation).toBe("DOCX media:huge.jpeg");

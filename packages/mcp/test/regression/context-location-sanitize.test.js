@@ -122,7 +122,7 @@ describe("PDF parser: sanitized filename in contextLocation", () => {
     };
     const out = await parsePdfBuffer(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
     const hit = (out.extraFindings || []).find(
-      (f) => f.technique === "Oversize attachment skipped (> 5MB)",
+      (f) => f.technique === "pdf-oversize-attachment",
     );
     expect(hit).toBeTruthy();
     expect(hit.contextLocation).not.toMatch(/‮/);

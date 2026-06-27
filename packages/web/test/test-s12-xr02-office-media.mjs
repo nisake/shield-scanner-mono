@@ -203,6 +203,64 @@ staticAssertAbsent(
   'Microscopic font size (${'
 );
 
+// --- v1.15.0 Theme A embedded-binary-surface static-source needles --------
+// Pin the kebab-case technique ids in the 3 Web parsers (docx/pptx/xlsx) and
+// guard against a revert to the legacy template-literal label. The legacy
+// label baked _OFFICE_MEDIA_MAX_BYTES into the technique string (R12
+// violation in spirit — fine because it was a module constant, but the
+// kebab id + meta.maxBytes split is the v1.15.0 contract).
+const XLSX_WEB_SRC_PATH = resolve(__dirname, '..', 'src', 'parsers-web', 'xlsx.js');
+let xlsxSrc = null;
+try { xlsxSrc = readFileSync(XLSX_WEB_SRC_PATH, 'utf8'); } catch (e) { xlsxSrc = null; }
+
+staticAssert(
+  "v1.15.0 (static-source) parseDocx emits kebab technique 'oversize-embedded-image'",
+  docxSrc,
+  "technique: 'oversize-embedded-image'"
+);
+staticAssert(
+  "v1.15.0 (static-source) parseDocx emits kebab technique 'empty-embedded-image'",
+  docxSrc,
+  "technique: 'empty-embedded-image'"
+);
+staticAssertAbsent(
+  "v1.15.0 (static-source) parseDocx no longer emits legacy 'Oversize embedded image skipped (>'",
+  docxSrc,
+  'Oversize embedded image skipped (>'
+);
+
+staticAssert(
+  "v1.15.0 (static-source) parsePptx emits kebab technique 'oversize-embedded-image'",
+  pptxSrc,
+  "technique: 'oversize-embedded-image'"
+);
+staticAssert(
+  "v1.15.0 (static-source) parsePptx emits kebab technique 'empty-embedded-image'",
+  pptxSrc,
+  "technique: 'empty-embedded-image'"
+);
+staticAssertAbsent(
+  "v1.15.0 (static-source) parsePptx no longer emits legacy 'Oversize embedded image skipped (>'",
+  pptxSrc,
+  'Oversize embedded image skipped (>'
+);
+
+staticAssert(
+  "v1.15.0 (static-source) parseXlsx emits kebab technique 'oversize-embedded-image'",
+  xlsxSrc,
+  "technique: 'oversize-embedded-image'"
+);
+staticAssert(
+  "v1.15.0 (static-source) parseXlsx emits kebab technique 'empty-embedded-image'",
+  xlsxSrc,
+  "technique: 'empty-embedded-image'"
+);
+staticAssertAbsent(
+  "v1.15.0 (static-source) parseXlsx no longer emits legacy 'Oversize embedded image skipped (>'",
+  xlsxSrc,
+  'Oversize embedded image skipped (>'
+);
+
 // --- Functional integration tests -----------------------------------------
 // These exercise the actual parsers via JSZip-built synthetic archives. If
 // JSZip isn't available we SKIP both with a PASS-noop log (devDependency
@@ -357,6 +415,170 @@ async function runDocxMicroscopicFunctional() {
 await runDocxFunctional();
 await runPptxFunctional();
 await runDocxMicroscopicFunctional();
+
+// --- v1.15.0 Theme A empty-embedded-image functional integration ----------
+// Synthesize an Office archive with a 0-byte `*/media/empty.jpg` entry and
+// assert each Web parser surfaces exactly one hiddenFinding with
+// technique==='empty-embedded-image' / severity==='warning' /
+// contextLocation starting '<FMT> media:empty.jpg'. The 0-byte buffer is
+// constructed inline via `new Uint8Array(0)` — no fixture file on disk.
+
+async function runDocxEmptyImageFunctional() {
+  const name =
+    "v1.15.0 (functional) parseDocx empty-embedded-image: word/media/empty.jpg=0-byte surfaces technique='empty-embedded-image' + warning + 'DOCX media:empty.jpg' prefix";
+  const JSZip = await tryLoadJSZip();
+  if (!JSZip) {
+    record(name, 'skip', 'jszip not installed');
+    return { skipped: true };
+  }
+  const hadGlobal = 'JSZip' in globalThis;
+  const prevGlobal = globalThis.JSZip;
+  globalThis.JSZip = JSZip;
+  try {
+    const { parseDocx } = await import('../src/parsers-web/docx.js');
+    const zip = new JSZip();
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>'
+    );
+    zip.file('word/media/empty.jpg', new Uint8Array(0));
+    const buf = await zip.generateAsync({ type: 'uint8array' });
+    const out = await parseDocx(buf);
+    const empties = (out.hiddenFindings || []).filter(
+      (f) => f.technique === 'empty-embedded-image'
+    );
+    const surfaceOk = empties.length === 1;
+    const severityOk = surfaceOk && empties[0].severity === 'warning';
+    const ctxOk = surfaceOk && typeof empties[0].contextLocation === 'string'
+      && empties[0].contextLocation.startsWith('DOCX media:empty.jpg');
+    const elementOk = surfaceOk && empties[0].element === 'DOCX Embedded Image';
+    const ok = surfaceOk && severityOk && ctxOk && elementOk;
+    record(
+      name,
+      ok,
+      ok ? null : `surfaceOk=${surfaceOk} severityOk=${severityOk} ctxOk=${ctxOk} elementOk=${elementOk} hiddenFindings=${JSON.stringify(out.hiddenFindings)}`
+    );
+    return {};
+  } catch (e) {
+    record(name, false, e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : String(e));
+    return {};
+  } finally {
+    if (hadGlobal) globalThis.JSZip = prevGlobal;
+    else delete globalThis.JSZip;
+  }
+}
+
+async function runPptxEmptyImageFunctional() {
+  const name =
+    "v1.15.0 (functional) parsePptx empty-embedded-image: ppt/media/empty.jpg=0-byte surfaces technique='empty-embedded-image' + warning + 'PPTX media:empty.jpg' prefix";
+  const JSZip = await tryLoadJSZip();
+  if (!JSZip) {
+    record(name, 'skip', 'jszip not installed');
+    return { skipped: true };
+  }
+  const hadGlobal = 'JSZip' in globalThis;
+  const prevGlobal = globalThis.JSZip;
+  globalThis.JSZip = JSZip;
+  try {
+    const { parsePptx } = await import('../src/parsers-web/pptx.js');
+    const zip = new JSZip();
+    zip.file(
+      'ppt/slides/slide1.xml',
+      '<?xml version="1.0"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>hi</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>'
+    );
+    zip.file('ppt/media/empty.jpg', new Uint8Array(0));
+    const buf = await zip.generateAsync({ type: 'uint8array' });
+    const out = await parsePptx(buf);
+    const empties = (out.hiddenFindings || []).filter(
+      (f) => f.technique === 'empty-embedded-image'
+    );
+    const surfaceOk = empties.length === 1;
+    const severityOk = surfaceOk && empties[0].severity === 'warning';
+    const ctxOk = surfaceOk && typeof empties[0].contextLocation === 'string'
+      && empties[0].contextLocation.startsWith('PPTX media:empty.jpg');
+    const elementOk = surfaceOk && empties[0].element === 'PPTX Embedded Image';
+    const ok = surfaceOk && severityOk && ctxOk && elementOk;
+    record(
+      name,
+      ok,
+      ok ? null : `surfaceOk=${surfaceOk} severityOk=${severityOk} ctxOk=${ctxOk} elementOk=${elementOk} hiddenFindings=${JSON.stringify(out.hiddenFindings)}`
+    );
+    return {};
+  } catch (e) {
+    record(name, false, e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : String(e));
+    return {};
+  } finally {
+    if (hadGlobal) globalThis.JSZip = prevGlobal;
+    else delete globalThis.JSZip;
+  }
+}
+
+async function runXlsxEmptyImageFunctional() {
+  const name =
+    "v1.15.0 (functional) parseXlsx empty-embedded-image: xl/media/empty.jpg=0-byte surfaces technique='empty-embedded-image' + warning + 'XLSX media:empty.jpg' prefix + category='hiddenHtml'";
+  const JSZip = await tryLoadJSZip();
+  if (!JSZip) {
+    record(name, 'skip', 'jszip not installed');
+    return { skipped: true };
+  }
+  const hadGlobal = 'JSZip' in globalThis;
+  const prevGlobal = globalThis.JSZip;
+  globalThis.JSZip = JSZip;
+  try {
+    const { parseXlsx } = await import('../src/parsers-web/xlsx.js');
+    const zip = new JSZip();
+    // Minimal but parseable workbook — mirrors test-s10-xlsx.mjs scaffolding.
+    zip.file(
+      '[Content_Types].xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`
+    );
+    zip.file(
+      '_rels/.rels',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`
+    );
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>hi</t></is></c></row></sheetData></worksheet>`
+    );
+    zip.file('xl/media/empty.jpg', new Uint8Array(0));
+    const buf = await zip.generateAsync({ type: 'uint8array' });
+    const out = await parseXlsx(buf);
+    const empties = (out.hiddenFindings || []).filter(
+      (f) => f.technique === 'empty-embedded-image'
+    );
+    const surfaceOk = empties.length === 1;
+    const severityOk = surfaceOk && empties[0].severity === 'warning';
+    const ctxOk = surfaceOk && typeof empties[0].contextLocation === 'string'
+      && empties[0].contextLocation.startsWith('XLSX media:empty.jpg');
+    const elementOk = surfaceOk && empties[0].element === 'XLSX Embedded Image';
+    const categoryOk = surfaceOk && empties[0].category === 'hiddenHtml';
+    const ok = surfaceOk && severityOk && ctxOk && elementOk && categoryOk;
+    record(
+      name,
+      ok,
+      ok ? null : `surfaceOk=${surfaceOk} severityOk=${severityOk} ctxOk=${ctxOk} elementOk=${elementOk} categoryOk=${categoryOk} hiddenFindings=${JSON.stringify(out.hiddenFindings)}`
+    );
+    return {};
+  } catch (e) {
+    record(name, false, e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : String(e));
+    return {};
+  } finally {
+    if (hadGlobal) globalThis.JSZip = prevGlobal;
+    else delete globalThis.JSZip;
+  }
+}
+
+await runDocxEmptyImageFunctional();
+await runPptxEmptyImageFunctional();
+await runXlsxEmptyImageFunctional();
 
 console.log(`\nTotal: ${passed} passed / ${failed} failed / ${skipped} skipped`);
 process.exitCode = failed === 0 ? 0 : 1;

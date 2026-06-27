@@ -370,8 +370,17 @@ add('C: i18n struct-tree-cap-exceeded ja/en + t_technique fallback', async () =>
 add('C2: i18n new 3 PDF labels (jsAction / oversize / empty) JA+EN via t_technique', async () => {
   const { i18n, t_technique } = await import('../src/i18n.js');
 
-  // Dict entries (JA + EN) must exist and be non-empty for all three keys.
-  const newKeys = ['pdfEmbedsJavaScriptActions', 'oversizeAttachmentSkipped', 'emptyAttachment'];
+  // v1.17.0 (T2): PDF technique refactored to kebab IDs — i18n adds new
+  // `pdfOversizeAttachment` / `pdfEmptyAttachment` keys but keeps legacy
+  // `oversizeAttachmentSkipped` / `emptyAttachment` for EML-side parity.
+  const newKeys = [
+    'pdfEmbedsJavaScriptActions',
+    'pdfEmbedsJavascriptActions',
+    'oversizeAttachmentSkipped',
+    'emptyAttachment',
+    'pdfOversizeAttachment',
+    'pdfEmptyAttachment',
+  ];
   for (const k of newKeys) {
     if (typeof i18n.ja[k] !== 'string' || i18n.ja[k].length === 0) {
       throw new Error(`i18n.ja.${k} missing or empty`);
@@ -381,12 +390,15 @@ add('C2: i18n new 3 PDF labels (jsAction / oversize / empty) JA+EN via t_techniq
     }
   }
 
-  // technique strings emitted by the actual parser (R12 fixed句). These are
-  // the literal strings detectors push into hiddenFindings[].technique.
+  // technique strings emitted by the actual parser (R12 fixed句). v1.17.0
+  // (T2): PDF parser emits kebab IDs — they resolve via the kebab→camel
+  // resolver (path 2). Note: kebab `javascript` → camel `Javascript` (lowercase
+  // s) so we maintain BOTH `pdfEmbedsJavaScriptActions` (legacy English casing)
+  // AND `pdfEmbedsJavascriptActions` (kebab→camel target) as i18n keys.
   const cases = [
-    ['PDF embeds JavaScript actions', 'pdfEmbedsJavaScriptActions'],
-    ['Oversize attachment skipped (> 5MB)', 'oversizeAttachmentSkipped'],
-    ['Empty attachment', 'emptyAttachment'],
+    ['pdf-embeds-javascript-actions', 'pdfEmbedsJavascriptActions'],
+    ['pdf-oversize-attachment', 'pdfOversizeAttachment'],
+    ['pdf-empty-attachment', 'pdfEmptyAttachment'],
   ];
   for (const [raw, dictKey] of cases) {
     const got = t_technique(raw);

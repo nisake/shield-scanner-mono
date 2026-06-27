@@ -64,7 +64,7 @@ describe("S8 DOCX extended parts: tracked-change deletions", () => {
     });
     const r = await parseDocxBuffer(buf);
     const dels = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("w:del"),
+      (f) => f.technique && f.technique.includes("tracked-change"),
     );
     expect(dels.length).toBe(1);
     expect(dels[0].severity).toBe("warning");
@@ -84,7 +84,7 @@ describe("S8 DOCX extended parts: tracked-change deletions", () => {
     });
     const r = await parseDocxBuffer(buf);
     const dels = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("w:del"),
+      (f) => f.technique && f.technique.includes("tracked-change"),
     );
     expect(dels.length).toBe(1);
     expect(dels[0].severity).toBe("danger");
@@ -101,7 +101,7 @@ describe("S8 DOCX extended parts: tracked-change deletions", () => {
     });
     const r = await parseDocxBuffer(buf);
     const dels = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("w:del"),
+      (f) => f.technique && f.technique.includes("tracked-change"),
     );
     expect(dels.length).toBe(0);
   });
@@ -251,7 +251,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({ customXml });
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     expect(props.length).toBe(1);
     // S8: routes to suspiciousPatterns bucket via the `category` field
@@ -275,7 +275,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({ customXml });
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     expect(props.length).toBe(0);
   });
@@ -284,7 +284,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({});
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     expect(props.length).toBe(0);
   });
@@ -307,7 +307,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({ customXml });
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     expect(props.length).toBe(1);
     expect(props[0].severity).toBe("warning");
@@ -329,7 +329,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({ customXml });
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     // Two attack-shaped siblings (one lpwstr, one lpstr) must both surface.
     expect(props.length).toBe(2);
@@ -352,7 +352,7 @@ describe("S8 DOCX extended parts: docProps/custom.xml", () => {
     const buf = await buildDocx({ customXml });
     const r = await parseDocxBuffer(buf);
     const props = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("Custom property"),
+      (f) => f.technique && f.technique.includes("custom-property"),
     );
     expect(props.length).toBe(1);
     // The raw XML attr "weird&amp;name" is captured verbatim by the regex

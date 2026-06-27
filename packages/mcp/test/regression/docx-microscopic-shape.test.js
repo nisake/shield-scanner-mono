@@ -268,7 +268,7 @@ describe("v1.14.0 ext-2 Theme docx-microscopic-shape-extension: tracked-change r
     });
     const r = await parseDocxBuffer(buf);
     const dels = (r.extraFindings || []).filter(
-      (f) => f.technique && f.technique.includes("w:del"),
+      (f) => f.technique && f.technique.includes("tracked-change"),
     );
     expect(dels.length).toBe(1);
     expect(dels[0].severity).toBe("warning");

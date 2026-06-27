@@ -78,7 +78,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /very-hidden sheet/i.test(f.technique),
+        /veryhidden-sheet/i.test(f.technique),
     );
     expect(veryHidden.length).toBeGreaterThanOrEqual(1);
     expect(veryHidden[0].severity).toBe("danger");
@@ -87,7 +87,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /Auto-run definedName/i.test(f.technique),
+        /auto-run-defined-name/i.test(f.technique),
     );
     expect(autoOpen.length).toBeGreaterThanOrEqual(1);
     // MV-04 macrosheets/ warning landing in hiddenHtml.
@@ -95,7 +95,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /XLM 4\.0 macrosheet/i.test(f.technique),
+        /xlm-macrosheet/i.test(f.technique),
     );
     expect(macrosheets.length).toBeGreaterThanOrEqual(1);
   });
@@ -114,7 +114,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /(very-hidden sheet|Hidden sheet|Non-standard sheet-state)/i.test(
+        /(veryhidden-sheet|hidden-sheet|sheet-state-confusion)/i.test(
           f.technique,
         ),
     );
@@ -133,7 +133,8 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /UNC\/SMB external reference/i.test(f.technique),
+        /external-relationship/i.test(f.technique) &&
+        f.meta && f.meta.scheme === "unc",
     );
     expect(uncHits.length).toBeGreaterThanOrEqual(1);
     expect(uncHits[0].severity).toBe("danger");
@@ -151,9 +152,12 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
         f &&
         f.element === "OPC Relationship" &&
         typeof f.technique === "string" &&
-        /(UNC\/SMB|HTTP external reference|Dangerous URL scheme)/i.test(
-          f.technique,
-        ),
+        /external-relationship/i.test(f.technique) &&
+        f.meta &&
+        (f.meta.scheme === "unc" ||
+          f.meta.scheme === "http" ||
+          f.meta.scheme === "jsOrData" ||
+          f.meta.scheme === "file"),
     );
     expect(externalHits.length).toBeGreaterThanOrEqual(1);
   });
@@ -170,14 +174,14 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /VBA macro project present/i.test(f.technique),
+        /vba-macro-project/i.test(f.technique),
     );
     expect(vbaPresent.length).toBeGreaterThanOrEqual(1);
     const mismatch = (r.findings.hiddenHtml || []).filter(
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /Extension\/ContentType mismatch/i.test(f.technique),
+        /extension-content-type-mismatch/i.test(f.technique),
     );
     expect(mismatch.length).toBeGreaterThanOrEqual(1);
   });
@@ -193,7 +197,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /Prompt injection in document properties/i.test(f.technique),
+        /docprops-prompt-injection/i.test(f.technique),
     );
     expect(docPropsHits.length).toBeGreaterThanOrEqual(1);
     expect(docPropsHits[0].severity).toBe("warning");
@@ -210,7 +214,7 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /Hyperlink base silent rewrite/i.test(f.technique),
+        /hyperlink-base-rewrite/i.test(f.technique),
     );
     expect(hbHits.length).toBeGreaterThanOrEqual(1);
     expect(hbHits[0].severity).toBe("danger");
@@ -226,7 +230,8 @@ describe("S10 XLSX extended parts: attack fixtures", () => {
       (f) =>
         f &&
         typeof f.technique === "string" &&
-        /Instruction-shaped threaded comment/i.test(f.technique),
+        /instruction-shaped-comment/i.test(f.technique) &&
+        f.meta && f.meta.threaded === true,
     );
     expect(threadedHits.length).toBeGreaterThanOrEqual(1);
     expect(threadedHits[0].severity).toBe("warning");

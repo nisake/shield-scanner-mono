@@ -189,10 +189,10 @@ describe("S10 parity: graceful-failure shape stays in lockstep", () => {
     expect((mcp.extraFindings || []).length).toBeGreaterThanOrEqual(1);
     expect((web.hiddenFindings || []).length).toBeGreaterThanOrEqual(1);
     const mcpOversize = (mcp.extraFindings || []).find((f) =>
-      /exceeds scan limits|oversize|too large/i.test(f.technique || ""),
+      /csv-scan-limit-(bytes|rows)|exceeds scan limits|oversize|too large/i.test(f.technique || ""),
     );
     const webOversize = (web.hiddenFindings || []).find((f) =>
-      /exceeds scan limits|oversize|too large/i.test(f.technique || ""),
+      /csv-scan-limit-(bytes|rows)|exceeds scan limits|oversize|too large/i.test(f.technique || ""),
     );
     expect(mcpOversize).toBeTruthy();
     expect(webOversize).toBeTruthy();

@@ -187,7 +187,7 @@ add('91 S10 CSV: oversize buffer (>10MB) emits oversize warning', async () => {
   const out = await parseCsv(oversize);
   if (out.fileType !== 'csv') throw new Error(`fileType=${out.fileType}`);
   const oversizeHit = (out.hiddenFindings || []).find(
-    (f) => /exceeds scan limits|partial scan|exceeds row limit|too large/i.test(f.technique || ''),
+    (f) => /exceeds scan limits|partial scan|exceeds row limit|too large|csv-scan-limit/i.test(f.technique || ''),
   );
   if (!oversizeHit) {
     throw new Error(`no oversize warning. findings=${JSON.stringify(out.hiddenFindings)}`);

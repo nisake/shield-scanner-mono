@@ -77,12 +77,12 @@ add('71 S10 XLSX: xlsx_very_hidden_with_auto_open surfaces SC-02 + FI-03 + MV-04
   if (out.fileType !== 'xlsx') throw new Error(`fileType=${out.fileType}`);
   // SC-02 veryHidden — danger
   const veryHidden = hasFindingMatching(out.hiddenFindings,
-    (f) => f.severity === 'danger' && /veryHidden/i.test(f.technique || ''));
+    (f) => f.severity === 'danger' && f.technique === 'veryhidden-sheet');
   if (!veryHidden) throw new Error('no veryHidden danger finding');
   // FI-03 — Auto-trigger definedName (suspiciousPatterns)
   const autoOpen = hasFindingMatching(out.hiddenFindings,
-    (f) => f.category === 'suspiciousPatterns' && /Auto-trigger definedName/i.test(f.technique || ''));
-  if (!autoOpen) throw new Error('no Auto-trigger definedName finding');
+    (f) => f.category === 'suspiciousPatterns' && f.technique === 'auto-run-defined-name');
+  if (!autoOpen) throw new Error('no auto-run-defined-name finding');
 });
 
 // --- 72: SC-02 state-confusion / case-folded veryHidden detection ---
@@ -110,7 +110,9 @@ add('73 S10 XLSX: xlsx_external_link_unc_smb surfaces ER-03 UNC danger', async (
   if (!buf) throw new Error('fixture missing');
   const out = await parseXlsx(buf);
   const unc = hasFindingMatching(out.hiddenFindings,
-    (f) => f.severity === 'danger' && /UNC|SMB|NTLM/i.test(f.technique || ''));
+    (f) => f.severity === 'danger'
+      && f.technique === 'external-relationship'
+      && f.meta && f.meta.scheme === 'unc');
   if (!unc) {
     throw new Error(`no UNC danger finding. findings=${JSON.stringify(out.hiddenFindings)}`);
   }
@@ -128,7 +130,7 @@ add('74 S10 XLSX: xlsx_vba_present_extension_mismatch surfaces MV-04 vbaProject 
   if (dangers.length < 1) {
     throw new Error(`expected >=1 danger finding, got ${dangers.length}. findings=${JSON.stringify(out.hiddenFindings)}`);
   }
-  const vba = dangers.some((f) => /vbaProject|VBA macro/i.test(f.technique || ''));
+  const vba = dangers.some((f) => f.technique === 'vba-macro-project');
   if (!vba) throw new Error('no vbaProject finding among dangers');
 });
 
@@ -139,7 +141,7 @@ add('75 S10 XLSX: xlsx_docprops_prompt_injection surfaces MD-05 warnings on docP
   const out = await parseXlsx(buf);
   const md05 = hasFindingMatching(out.hiddenFindings,
     (f) => f.category === 'suspiciousPatterns'
-        && /docProps|prompt injection/i.test((f.element || '') + ' ' + (f.technique || '')));
+        && f.technique === 'docprops-prompt-injection');
   if (!md05) {
     throw new Error(`no docProps prompt-injection finding. findings=${JSON.stringify(out.hiddenFindings)}`);
   }
@@ -248,7 +250,7 @@ add('82 S10 XLSX: oversize buffer (>10MB) short-circuits with warning', async ()
   const out = await parseXlsx(oversize);
   if (out.fileType !== 'xlsx') throw new Error(`fileType=${out.fileType}`);
   const oversizeHit = (out.hiddenFindings || []).find(
-    (f) => /exceeds scan limits/i.test(f.technique || ''),
+    (f) => f.technique === 'xlsx-scan-limit',
   );
   if (!oversizeHit) {
     throw new Error(`no oversize warning. findings=${JSON.stringify(out.hiddenFindings)}`);

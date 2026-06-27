@@ -61,9 +61,19 @@ const FIXTURES = [
   { file: "xlsx_external_link_unc_smb.xlsx",             dir: ATTACKS_DIR }, // ER-03 UNC
   { file: "xlsx_docprops_prompt_injection.xlsx",         dir: ATTACKS_DIR }, // MD-05
   { file: "xlsx_threaded_comment_persona_spoof.xlsx",    dir: ATTACKS_DIR }, // MV-07
+  // v1.18.0 — deep-execution surface (Theme: Power Query / data connection /
+  // ActiveX / customUI). MCP↔Web parsers ship byte-identical scanners so the
+  // (category, severity) bucket multiset must agree exactly.
+  { file: "xlsx_power_query_webcontents.xlsx",            dir: ATTACKS_DIR },
+  { file: "xlsx_data_connection_oledb_cmd.xlsx",          dir: ATTACKS_DIR },
+  { file: "xlsx_activex_equation_editor.xlsx",            dir: ATTACKS_DIR },
+  { file: "xlsx_custom_ui_onload_callback.xlsx",          dir: ATTACKS_DIR },
   // --- benign (must agree on "no detection-bucket disagreement") ---
   { file: "xlsx_benign_invoice_template.xlsx",           dir: BENIGN_DIR },
   { file: "xlsx_benign_chart_with_title.xlsx",           dir: BENIGN_DIR },
+  // v1.18.0 benigns — both parsers must agree on "no shell / no Power Query".
+  { file: "benign_xlsx_legit_connections_https.xlsx",     dir: BENIGN_DIR },
+  { file: "benign_xlsx_pivot_table_query.xlsx",           dir: BENIGN_DIR },
 ];
 
 // Fixtures where MCP and Web emit DIFFERENT severity / count for the same
@@ -249,6 +259,11 @@ describe("S10 parity: coverage sanity", () => {
       "xlsx_customxml_payload.xlsx",
       "xlsx_drawing_external_image_unc.xlsx",
       "xlsx_hyperlinkbase_silent_rewrite.xlsx",
+      // T8-XLSX-OLE: web helper is tree-shaken / not in parser registry,
+      // so these MCP-only OLE-bearing fixtures are not in the strict parity loop.
+      "xlsx_ole_encrypted.xlsx",
+      "xlsx_ole_macro_bearing.xlsx",
+      "xlsx_ole_oversize.xlsx",
     ]);
     const missing = onDisk.filter(
       (f) => !listed.has(f) && !KNOWN_NON_PARITY.has(f),

@@ -79,11 +79,12 @@ export async function parseCsvBuffer(buffer, opts = {}) {
     truncated = true;
     extraFindings.push({
       element: "CSV File",
-      technique: "CSV exceeds scan limits — partial scan",
+      technique: "csv-scan-limit-bytes",
       content: `(file > ${CSV_MAX_BYTES} bytes; scanning leading slice only)`,
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: "CSV File",
+      meta: { maxBytes: CSV_MAX_BYTES, byteLen: u8.byteLength },
     });
   }
 
@@ -95,11 +96,12 @@ export async function parseCsvBuffer(buffer, opts = {}) {
     // Fail-soft on unsupported encoding (Safari historically lacks shift-jis).
     extraFindings.push({
       element: "CSV File",
-      technique: "Encoding decode failure — falling back to UTF-8",
+      technique: "csv-encoding-fallback",
       content: `(${err && err.message ? err.message : "unknown decode error"})`,
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: "CSV File",
+      meta: { encoding: "utf-8", note: err && err.message ? err.message : "unknown decode error" },
     });
     try {
       text = new TextDecoder("utf-8", { fatal: false }).decode(scanU8);
@@ -120,11 +122,12 @@ export async function parseCsvBuffer(buffer, opts = {}) {
     // warning, so we only emit when row cap fires standalone.
     extraFindings.push({
       element: "CSV File",
-      technique: "CSV exceeds row limit — partial scan",
+      technique: "csv-scan-limit-rows",
       content: `(row count >= ${CSV_MAX_ROWS}; trailing rows skipped)`,
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: "CSV File",
+      meta: { maxRows: CSV_MAX_ROWS, cappedAt: cellsByRow.length },
     });
   }
 
