@@ -45,6 +45,7 @@ asserts byte-identical findings between the two on every PR (drift budget: **0**
 - [Internationalization](#internationalization)
 - [Contributing](#contributing)
 - [Security policy](#security-policy)
+- [Disclaimer](#disclaimer)
 - [License](#license)
 - [Credits](#credits)
 - [Migration notes](#migration-notes)
@@ -437,8 +438,20 @@ A short [CONTRIBUTING.md](./CONTRIBUTING.md) walks through the typical workflow.
 
 Please **do not** open a public GitHub issue for a security vulnerability. Instead, use
 **GitHub Security Advisories** ("Report a vulnerability" on the repository's Security tab).
-See [SECURITY.md](./SECURITY.md) for the full policy, supported versions, and disclosure
-timeline.
+See [SECURITY.md](./SECURITY.md) for the reporting workflow.
+
+---
+
+## Disclaimer
+
+Shield Scanner is a **reference utility** for surfacing suspicious patterns
+(invisible characters, hidden text, encoded payloads, homoglyph host swaps,
+etc.) in untrusted LLM input. It does **not guarantee safety**: detection is
+heuristic, new attack techniques may slip through, and false positives /
+negatives are both possible. Use it as one defense layer among several, not
+the only one.
+
+See [LICENSE](./LICENSE) for the full no-warranty / no-liability clauses (MIT).
 
 ---
 
