@@ -27,9 +27,13 @@ import { parseImage } from './image.js';
 // Mirrors the MCP-side set so parity-check drift stays 0. Widget dedupes
 // against the AcroForm fieldName registry; FileAttachment dedupes against
 // the catalog getAttachments key.
+// v1.18.0 S16 (Web mirror): RichMedia / 3D / Sound / Movie subtypes added.
+// MCP-parity — same kebab signals, same 1-per-doc invariant. Body bounded
+// to PDF spec enum so R12 invariant holds across the parity boundary.
 const _PDF_ANN_SUBTYPES = new Set([
   'Highlight','FreeText','Popup','Squiggly','Stamp','Link',
   'Widget','FileAttachment',
+  'RichMedia','3D','Sound','Movie',
 ]);
 const _PDF_RECURSION_LIMIT = 2;
 // Kept in sync with the MCP server's RECURSIVE_EXTS (parsers/pdf.js).
@@ -109,6 +113,26 @@ async function parsePdf(buffer, options) {
   // PDF-DEEP-05 (Web mirror): emit struct-tree-cap-exceeded at most once.
   let structTreeCapExceeded = false;
 
+  // v1.17.0 (T2) S15 (Web mirror): pdf-widget-action signal — once per doc.
+  // Collect distinct action-type enum tokens (PDF spec fixed names) into a
+  // bounded Set. R12 safe: type names are PDF spec enum, NOT attacker body.
+  let widgetActionFound = false;
+  const widgetActionTypes = new Set();
+  const _WIDGET_ACTION_TYPES_CAP = 8;
+
+  // v1.18.0 S16 (Web mirror): PDF non-JS high-risk action / multimedia
+  // signals — 1-per-doc invariant matches MCP-side. meta.targetUrl /
+  // meta.target / meta.subtype are detector-controlled sanitized fields
+  // (no raw attacker text crosses the surface boundary).
+  let submitFormSeen = false;
+  let submitFormTargetUrl = '';
+  let gotoRemoteSeen = false;
+  let gotoRemoteTarget = '';
+  let richMediaSeen = false;
+  let threeDSeen = false;
+  let soundSeen = false;
+  let movieSeen = false;
+
   // PDF-DEEP-04 (Web mirror): dedup sets shared across per-page + catalog.
   // Pre-seed AcroForm fieldNames so Widget annotations on earlier pages
   // skip a name AcroForm will emit later (MCP parity).
@@ -173,13 +197,68 @@ async function parsePdf(buffer, options) {
             if (a.actions && typeof a.actions === 'object') {
               for (const [act, bodies] of Object.entries(a.actions)) {
                 if (!Array.isArray(bodies)) continue;
+                // S15 (T2): collect action-type enum for pdf-widget-action signal.
+                let hasNonEmptyBody = false;
                 for (const body of bodies) {
                   if (typeof body === 'string' && body.trim()) {
+                    hasNonEmptyBody = true;
                     texts.push(`[PDF page=${i} kind=widget-action field=${_sanitizePdfKey(fname || '_')} act=${_sanitizePdfKey(act)}] ${body}`);
+                  }
+                }
+                if (hasNonEmptyBody) {
+                  widgetActionFound = true;
+                  if (widgetActionTypes.size < _WIDGET_ACTION_TYPES_CAP) {
+                    widgetActionTypes.add(_sanitizePdfKey(act));
                   }
                 }
               }
             }
+          }
+        }
+
+        // v1.18.0 S16 (Web mirror): non-JS high-risk + multimedia subtype
+        // detection. Mirrors MCP-side. Body bounded to PDF spec enum (R12).
+        if (a.subtype === 'RichMedia') richMediaSeen = true;
+        if (a.subtype === '3D') threeDSeen = true;
+        if (a.subtype === 'Sound') soundSeen = true;
+        if (a.subtype === 'Movie') movieSeen = true;
+
+        // SubmitForm + GoToR detection via a.actions map (MCP parity).
+        if (a.actions && typeof a.actions === 'object') {
+          for (const actName of Object.keys(a.actions)) {
+            if (actName === 'SubmitForm' && !submitFormSeen) {
+              submitFormSeen = true;
+              const bodies = Array.isArray(a.actions[actName]) ? a.actions[actName] : [];
+              for (const b of bodies) {
+                if (typeof b === 'string' && b.trim()) {
+                  submitFormTargetUrl = _sanitizePdfKey(b);
+                  break;
+                }
+              }
+            }
+            if (actName === 'GoToR' && !gotoRemoteSeen) {
+              gotoRemoteSeen = true;
+              const bodies = Array.isArray(a.actions[actName]) ? a.actions[actName] : [];
+              for (const b of bodies) {
+                if (typeof b === 'string' && b.trim()) {
+                  gotoRemoteTarget = _sanitizePdfKey(b);
+                  break;
+                }
+              }
+            }
+          }
+        }
+        // Link with /A SubmitForm/GoToR via a.url + action type tag.
+        if (a.subtype === 'Link' && typeof a.url === 'string' && a.url.trim()) {
+          const actionTag = (typeof a.actionType === 'string' && a.actionType) ||
+            (typeof a.action === 'string' && a.action) || '';
+          if (actionTag === 'GoToR' && !gotoRemoteSeen) {
+            gotoRemoteSeen = true;
+            gotoRemoteTarget = _sanitizePdfKey(a.url);
+          }
+          if (actionTag === 'SubmitForm' && !submitFormSeen) {
+            submitFormSeen = true;
+            submitFormTargetUrl = _sanitizePdfKey(a.url);
           }
         }
 
@@ -280,24 +359,30 @@ async function parsePdf(buffer, options) {
   } catch (e) { /* ignore metadata errors */ }
 
   // PDF-DEEP-01 (Web mirror): catalog-level JavaScript actions.
+  // v1.17.0 (T2): technique refactored to kebab id `pdf-embeds-javascript-
+  // actions` + meta.count (MCP parity). i18n resolves via existing
+  // pdfEmbedsJavaScriptActions key (kebab→camel path 2).
   try {
     if (typeof pdf.getJSActions === 'function') {
       const jsActions = await pdf.getJSActions();
       if (jsActions && typeof jsActions === 'object') {
-        let hadAny = false;
+        let actionCount = 0;
         for (const [name, bodies] of Object.entries(jsActions)) {
           if (!Array.isArray(bodies)) continue;
+          let nameHadBody = false;
           for (const body of bodies) {
             if (typeof body === 'string' && body.trim()) {
-              hadAny = true;
+              nameHadBody = true;
               texts.push(`[PDF kind=jsaction name=${_sanitizePdfKey(name)}] ${body}`);
             }
           }
+          if (nameHadBody) actionCount++;
         }
-        if (hadAny) {
+        if (actionCount > 0) {
           hiddenFindings.push({
             element: 'PDF Catalog',
-            technique: 'PDF embeds JavaScript actions',
+            technique: 'pdf-embeds-javascript-actions',
+            meta: { count: actionCount },
             content: '(see jsaction body in scan text)',
             severity: 'warning',
             contextLocation: 'Catalog',
@@ -306,6 +391,82 @@ async function parsePdf(buffer, options) {
       }
     }
   } catch (e) { /* ignore */ }
+
+  // v1.17.0 (T2): S15 pdf-widget-action signal (Web mirror — MCP parity).
+  if (widgetActionFound) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-widget-action',
+      meta: { actionTypes: Array.from(widgetActionTypes) },
+      content: '(see widget-action body in scan text)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+
+  // v1.18.0 S16 (Web mirror): non-JS high-risk + multimedia signals.
+  // 1-per-doc invariant matches MCP-side. Meta carries detector-controlled
+  // sanitized URL or PDF spec subtype enum — never raw attacker text.
+  if (submitFormSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-submit-form-action',
+      meta: { targetUrl: submitFormTargetUrl || '(unknown)' },
+      content: '(see submit-form action target in scan text)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+  if (gotoRemoteSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-goto-remote-action',
+      meta: { target: gotoRemoteTarget || '(unknown)' },
+      content: '(see go-to-remote action target in scan text)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+  if (richMediaSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-richmedia-embed',
+      meta: { subtype: 'RichMedia' },
+      content: '(RichMedia annotation present)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+  if (threeDSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-3d-embed',
+      meta: { subtype: '3D' },
+      content: '(3D annotation present)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+  if (soundSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-sound-action',
+      meta: { subtype: 'Sound' },
+      content: '(Sound annotation present)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
+  if (movieSeen) {
+    hiddenFindings.push({
+      element: 'PDF Catalog',
+      technique: 'pdf-movie-action',
+      meta: { subtype: 'Movie' },
+      content: '(Movie annotation present)',
+      severity: 'warning',
+      contextLocation: 'Catalog',
+    });
+  }
 
   // PDF-DEEP-02 (Web mirror): catalog /OpenAction (auto-launch).
   try {
@@ -378,14 +539,27 @@ async function parsePdf(buffer, options) {
         if (byteLen > _PDF_MAX_ATTACHMENT_BYTES) {
           hiddenFindings.push({
             element: 'PDF Attachment',
-            technique: 'Oversize attachment skipped (> 5MB)',
+            technique: 'pdf-oversize-attachment',
+            meta: { maxBytes: _PDF_MAX_ATTACHMENT_BYTES, actualBytes: byteLen },
             content: escapeForDisplay(filename.slice(0, 200)),
             severity: 'warning',
             contextLocation: `Attachment ${safeFilename}`,
           });
           continue;
         }
-        const ext = _extOf(filename);
+        let ext = _extOf(filename);
+        // v1.17.0 (T2): S15 pdf-embedded-html (Web mirror) — MIME-typed
+        // embedded file detection. att.subtype guarded since pdf.js v4
+        // contract doesn't guarantee it. When present we force ext='html'
+        // so existing Stage B dispatch routes through the html parser path.
+        let embeddedHtmlEmit = false;
+        if (typeof att.subtype === 'string') {
+          const subLow = att.subtype.toLowerCase();
+          if (subLow === 'text/html' || subLow === 'application/xhtml+xml') {
+            embeddedHtmlEmit = true;
+            ext = 'html';
+          }
+        }
         // MCP parity: extname returns '' for dotfiles (`.cursorrules`),
         // extensionless names (`README`, `Makefile`), and trailing dots.
         // MCP silently continues in that case, so we mirror — no warning.
@@ -395,12 +569,24 @@ async function parsePdf(buffer, options) {
           // know the channel exists, but don't try to parse it.
           hiddenFindings.push({
             element: 'PDF Attachment',
-            technique: 'Embedded binary attachment',
+            technique: 'pdf-embedded-binary-attachment',
+            meta: { ext },
             content: escapeForDisplay(filename.slice(0, 200)),
             severity: 'warning',
             contextLocation: `Attachment ${safeFilename}`,
           });
           continue;
+        }
+        // S15 (T2): emit pdf-embedded-html signal before dispatch.
+        if (embeddedHtmlEmit) {
+          hiddenFindings.push({
+            element: 'PDF Attachment',
+            technique: 'pdf-embedded-html',
+            meta: { subtype: 'text/html' },
+            content: escapeForDisplay(filename.slice(0, 200)),
+            severity: 'warning',
+            contextLocation: `Attachment ${safeFilename}`,
+          });
         }
         try {
           const sub = await _dispatchAttachmentBuffer(content, ext, depth + 1);
@@ -411,7 +597,7 @@ async function parsePdf(buffer, options) {
           if (byteLen === 0 && childTextEmpty) {
             hiddenFindings.push({
               element: 'PDF Attachment',
-              technique: 'Empty attachment',
+              technique: 'pdf-empty-attachment',
               content: escapeForDisplay(filename.slice(0, 200)),
               severity: 'warning',
               contextLocation: `Attachment ${safeFilename}`,

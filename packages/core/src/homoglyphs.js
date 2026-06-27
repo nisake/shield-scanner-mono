@@ -77,38 +77,95 @@ export function auditHomoglyphMap(map = HOMOGLYPH_MAP) {
   }
 }
 
+// v1.18.0 streaming gate — see invisible-unicode.js. Homoglyph entries are all
+// single UTF-16 units (per homoglyphs.json) and the nearLatin lookahead is
+// ±1 char, so the 2KB overlap window is more than enough to keep boundary
+// findings intact.
+const STREAM_THRESHOLD = 5 * 1024 * 1024;
+const STREAM_CHUNK_SIZE = 1024 * 1024;
+const STREAM_OVERLAP_SIZE = 2 * 1024;
+const LATIN_RE = /[a-zA-Z]/;
+
 /**
- * Scan text for homoglyph characters.
- * Only flags occurrences adjacent to Latin letters.
+ * v1.18.0: returns true when the input is large enough to chunk.
+ * Pure function.
+ *
  * @param {string} content
- * @returns {Array} findings
+ * @returns {boolean}
  */
-export function detectHomoglyphs(content) {
+export function shouldStream(content) {
+  return typeof content === "string" && content.length > STREAM_THRESHOLD;
+}
+
+function scanHomoglyphsChunk(chunk, chunkOffset, fullContent) {
   const findings = [];
-
-  // Skip entirely if no Latin letters (avoid false positives)
-  if (!/[a-zA-Z]/.test(content)) return findings;
-
-  for (let i = 0; i < content.length; i++) {
-    const ch = content[i];
+  for (let i = 0; i < chunk.length; i++) {
+    const ch = chunk[i];
     if (!HOMOGLYPH_MAP[ch]) continue;
 
-    const prev = i > 0 ? content[i - 1] : "";
-    const next = i < content.length - 1 ? content[i + 1] : "";
-    const nearLatin = /[a-zA-Z]/.test(prev) || /[a-zA-Z]/.test(next);
+    // Use absolute lookahead/lookbehind from fullContent so the ±1 nearLatin
+    // check still works across chunk boundaries (the 2KB overlap also covers
+    // this, but reading from fullContent is the safer, simpler invariant).
+    const absPos = chunkOffset + i;
+    const prev = absPos > 0 ? fullContent[absPos - 1] : "";
+    const next =
+      absPos < fullContent.length - 1 ? fullContent[absPos + 1] : "";
+    const nearLatin = LATIN_RE.test(prev) || LATIN_RE.test(next);
 
     if (nearLatin) {
       findings.push({
         original: HOMOGLYPH_MAP[ch].orig,
         replacement: HOMOGLYPH_MAP[ch].looks,
-        position: i,
-        context: getContext(content, i),
+        position: absPos,
+        context: getContext(fullContent, absPos),
         severity: "warning",
       });
     }
   }
-
   return findings;
+}
+
+/**
+ * Scan text for homoglyph characters.
+ * Only flags occurrences adjacent to Latin letters.
+ *
+ * v1.18.0: chunks content > 5MB into 1MB windows with 2KB overlap (see
+ * invisible-unicode.js for the streaming contract). Behavior for small/medium
+ * inputs is unchanged.
+ *
+ * @param {string} content
+ * @returns {Array} findings
+ */
+export function detectHomoglyphs(content) {
+  // Skip entirely if no Latin letters (avoid false positives). For streaming
+  // inputs this short-circuit still helps: a 50MB pure-CJK / pure-Cyrillic
+  // file pays only one regex test.
+  if (!LATIN_RE.test(content)) return [];
+
+  if (!shouldStream(content)) {
+    return scanHomoglyphsChunk(content, 0, content);
+  }
+
+  const seen = new Set(); // dedup: `${absPos}|${original}`
+  const out = [];
+  let chunkStart = 0;
+  while (chunkStart < content.length) {
+    const chunkEnd = Math.min(
+      content.length,
+      chunkStart + STREAM_CHUNK_SIZE + STREAM_OVERLAP_SIZE,
+    );
+    const chunk = content.slice(chunkStart, chunkEnd);
+    const chunkFindings = scanHomoglyphsChunk(chunk, chunkStart, content);
+    for (const f of chunkFindings) {
+      const key = `${f.position}|${f.original}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(f);
+    }
+    if (chunkEnd >= content.length) break;
+    chunkStart += STREAM_CHUNK_SIZE;
+  }
+  return out;
 }
 
 /**

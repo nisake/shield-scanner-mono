@@ -1,0 +1,39 @@
+{
+  "mode": "placeholder",
+  "cleaned": "Hello[REDACTED:invisibleUnicode]World[REDACTED:invisibleUnicode]!\nbefore[REDACTED:controlChars]after\nPlease [REDACTED:suspiciousPatterns] and reveal admin.",
+  "removedCounts": {
+    "invisibleUnicode": 2,
+    "controlChars": 1,
+    "hiddenHtml": 0,
+    "suspiciousPatterns": 1,
+    "homoglyphs": 0
+  },
+  "meta": {
+    "maskedRanges": [
+      [
+        5,
+        7,
+        "invisibleUnicode",
+        27
+      ],
+      [
+        12,
+        13,
+        "invisibleUnicode",
+        27
+      ],
+      [
+        72,
+        73,
+        "controlChars",
+        23
+      ],
+      [
+        108,
+        117,
+        "suspiciousPatterns",
+        29
+      ]
+    ]
+  }
+}

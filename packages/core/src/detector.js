@@ -32,6 +32,18 @@ import {
 } from "./shadow-copy.js";
 import { attachPriorities, buildTopFindings } from "./priority.js";
 import { detectFormulaInjection } from "./formula-injection.js";
+// v1.19.0 B4: structured-text frontmatter (YAML / TOML / JSON-LD) detector.
+// Folds into the existing suspiciousPatterns bucket (R13 5-bucket invariant
+// preserved). Auto-fires on fileType="markdown" (frontmatter + embedded
+// JSON-LD) or fileType="html" (JSON-LD blocks).
+import { detectStructuredTextFrontmatter } from "./structured-text-frontmatter.js";
+// v1.19.0 D1: Encoded payload decode pipeline (Base64 / Hex / Punycode / HTML
+// entity). Folds into the existing suspiciousPatterns bucket (R13 invariant
+// preserved). Runs on ALL fileTypes — encoded payloads are file-format-
+// agnostic (a base64 instruction can hide in plain text, markdown, or HTML
+// alike). R12 critical: decoded raw text NEVER reaches the response body —
+// the detector emits kebab IDs + byte-range meta only.
+import { detectEncodedPayloads } from "./encoded-decoder.js";
 
 export const ALL_CATEGORIES = [
   "invisibleUnicode",
@@ -46,6 +58,39 @@ export const ALL_CATEGORIES = [
 // .md / .mdc / .cursorrules file containing instruction-bearing comments needs
 // the same hidden-element sweep as plain HTML. (QW5)
 const HIDDEN_ELEMENT_FILETYPES = new Set(["html", "markdown"]);
+
+// v1.18.0 streaming wire: detectors (invisible-unicode / control-chars /
+// homoglyphs) auto-chunk inputs > 5MB internally. detector.js advertises this
+// at the analyze() summary level via `summary.streamed:true` +
+// `summary.chunkCount` so callers can tell streaming kicked in without having
+// to re-measure. The constants below must stay aligned with the individual
+// detector modules (we duplicate rather than import to avoid an extra source
+// of truth dependency at the analyze() entry).
+const STREAM_THRESHOLD = 5 * 1024 * 1024;
+const STREAM_CHUNK_SIZE = 1024 * 1024;
+
+/**
+ * v1.18.0: returns true when analyze() considers the input large enough to
+ * have triggered the per-detector streaming path. Exposed for tests and for
+ * downstream tooling (the benchmark task) that wants to know the gate
+ * decision without invoking analyze().
+ *
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function shouldStream(content) {
+  return typeof content === "string" && content.length > STREAM_THRESHOLD;
+}
+
+/**
+ * v1.18.0: number of chunks the streaming path produces for a given content
+ * length. Matches the math used by invisible-unicode.js / control-chars.js /
+ * homoglyphs.js (advance = CHUNK_SIZE, last chunk absorbs the tail).
+ */
+function computeChunkCount(len) {
+  if (len <= 0) return 0;
+  return Math.max(1, Math.ceil(len / STREAM_CHUNK_SIZE));
+}
 
 /**
  * Analyze content for all threat categories.
@@ -162,6 +207,42 @@ export function analyze(content, options = {}) {
         ...detectFormulaInjection(content, fileType)
       );
     }
+    // v1.19.0 B4: structured-text frontmatter / JSON-LD scan.
+    // Auto-dispatch by fileType — yaml / toml standalone files come via the
+    // parser registry (.yml / .yaml / .toml), markdown frontmatter rides the
+    // "markdown" fileType, embedded JSON-LD rides "html" or "markdown".
+    // Findings land in suspiciousPatterns (R13 fold). Kebab IDs:
+    //   - frontmatter-prompt-injection / yaml-dangerous-tag / yaml-anchor-bomb
+    //   - jsonld-description-injection / toml-instruction-key
+    if (
+      fileType === "markdown" ||
+      fileType === "html" ||
+      fileType === "yaml" ||
+      fileType === "toml"
+    ) {
+      const fmt =
+        fileType === "yaml"
+          ? "yaml"
+          : fileType === "toml"
+            ? "toml"
+            : "auto";
+      findings.suspiciousPatterns.push(
+        ...detectStructuredTextFrontmatter(content, { format: fmt })
+      );
+    }
+    // v1.19.0 D1: Encoded payload decode pipeline.
+    // File-format-agnostic — runs on every analyze() call regardless of
+    // fileType. Findings land in suspiciousPatterns (R13 fold). Kebab IDs:
+    //   - encoded-base64-instruction / encoded-hex-instruction
+    //   - encoded-html-entity-instruction / punycode-host-homograph
+    //   - multi-layer-encoded-payload
+    // R12 (critical): decoded raw text NEVER appears in any finding field.
+    // Only kebab `pattern`, fixed `matched` placeholder, raw byte-range
+    // meta, and enum encoding class are surfaced. See encoded-decoder.js
+    // module header for the absolute R12 design rules.
+    findings.suspiciousPatterns.push(
+      ...detectEncodedPayloads(content)
+    );
   }
   if (wanted.has("homoglyphs")) {
     // M3: Mathematical Alphanumeric bypass is a visual-mimicry attack — same
@@ -173,16 +254,344 @@ export function analyze(content, options = {}) {
     findings.homoglyphs = homo.concat(math);
   }
 
+  // v1.19.0 A2: heuristics context tuning. After all detection runs but BEFORE
+  // priority/banner selection, walk every finding and attach context flags
+  // (inCodeBlock / inQuote / inUrlQuery) based on its `position` relative to
+  // pre-computed markdown / HTML / URL ranges. Then nudge severity:
+  //   - inCodeBlock | inQuote -> step DOWN one tier (warning -> notice / notice ->
+  //     info) for non-load-bearing categories (variation-selector / homoglyph /
+  //     suspicious-pattern excluding TRANSCRIPT_NOISE / R21 heading rule).
+  //   - inUrlQuery -> ASCII-smuggling signal, step UP for VS / invisible-unicode
+  //     and emit dedicated kebab IDs ('url-query-variation-selector' /
+  //     'url-query-invisible-unicode').
+  // R13 5-key invariant unchanged — flags ride on existing finding objects via
+  // meta.{inCodeBlock,inQuote,inUrlQuery}; no new byCategory keys.
+  applyContextFlags(content, fileType, findings);
+
   // S18: attach `priority` (0-100) to every finding BEFORE we hand the object
   // out. buildTopFindings then reads back those priorities to pick the banner.
   // Order matters - topFindings filter on priority, so priorities must exist
   // first.
   attachPriorities(findings, content.length);
 
+  // v1.18.0: surface streaming status as a sibling key on `summary` (does NOT
+  // touch byCategory; R13 5-key invariant preserved). Only emitted when the
+  // streaming path actually fired, so non-streaming callers see no schema
+  // drift. `chunkCount` mirrors the chunk math used internally by the three
+  // streamed detectors (invisible-unicode / control-chars / homoglyphs).
+  const streamingExtras = shouldStream(content)
+    ? { streamed: true, chunkCount: computeChunkCount(content.length) }
+    : null;
+
   return {
     findings,
-    summary: buildSummary(findings),
+    summary: buildSummary(findings, { streaming: streamingExtras }),
   };
+}
+
+/**
+ * v1.19.0 A2: heuristics context tuning — pre-compute markdown/HTML/URL
+ * context ranges so per-finding lookup is O(log N) via interval list.
+ *
+ * Detected contexts (low-risk syntactic signals, not value-based):
+ *   - Markdown fenced code blocks: ``` ... ``` and ~~~ ... ~~~ across lines.
+ *   - Markdown inline code: `...` (single backtick, single line).
+ *   - HTML <pre>...</pre> and <code>...</code>.
+ *   - Markdown blockquotes: lines starting with `>` (after optional indent).
+ *   - URL query strings: substring after `?` of an http(s) URL up to the next
+ *     whitespace / `)` / `]` / `>` / quote.
+ *
+ * Why pre-compute: walking 100+ findings against a string each time would be
+ * O(N*M). Single-pass extraction → 3 sorted interval arrays. Per-finding check
+ * is binary-search → O(log N).
+ *
+ * Returns `{ codeBlocks, quotes, urlQueries }` where each array is sorted by
+ * `start` and entries are `[start, end)` UTF-16 positions in `content`.
+ *
+ * R12 contract: returned ranges are anchors only — the raw content is never
+ * surfaced through these (only meta.in{CodeBlock,Quote,UrlQuery} boolean flags
+ * land on findings).
+ *
+ * @param {string} content
+ * @param {string} fileType
+ * @returns {{ codeBlocks: Array<[number, number]>, quotes: Array<[number, number]>, urlQueries: Array<[number, number]> }}
+ */
+function buildContextRanges(content, fileType) {
+  const codeBlocks = [];
+  const quotes = [];
+  const urlQueries = [];
+  if (typeof content !== "string" || content.length === 0) {
+    return { codeBlocks, quotes, urlQueries };
+  }
+
+  // --- Markdown fenced code blocks: ``` ... ``` / ~~~ ... ~~~ -------------
+  // Conservative: require fence at line start (after optional whitespace).
+  // Track unmatched open as covering to EOF.
+  {
+    const fenceRe = /(^|\n)[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n/g;
+    let m;
+    let openStart = -1;
+    let openFence = "";
+    while ((m = fenceRe.exec(content)) !== null) {
+      const fence = m[2];
+      const lineStart = m.index + m[1].length;
+      const afterFenceLine = m.index + m[0].length;
+      if (openStart === -1) {
+        openStart = afterFenceLine;
+        openFence = fence[0]; // ` or ~
+      } else if (fence[0] === openFence && fence.length >= openFence.length) {
+        // Closing fence (same char family, length >= opening).
+        // The closing fence line itself is the END marker — content range stops
+        // at lineStart of the closing fence.
+        codeBlocks.push([openStart, lineStart]);
+        openStart = -1;
+        openFence = "";
+      }
+    }
+    if (openStart !== -1) {
+      codeBlocks.push([openStart, content.length]);
+    }
+  }
+
+  // --- Markdown inline code: `...` (single backtick) ----------------------
+  // Only inside a single line; multi-backtick code spans (``...``) ride the
+  // same regex variant. We skip ranges already inside a fenced block to avoid
+  // double-counting.
+  {
+    const inlineRe = /`([^`\n]+)`/g;
+    let m;
+    while ((m = inlineRe.exec(content)) !== null) {
+      const start = m.index + 1;
+      const end = m.index + m[0].length - 1;
+      if (!isInsideAnyRange(start, codeBlocks)) {
+        codeBlocks.push([start, end]);
+      }
+    }
+  }
+
+  // --- HTML <pre>...</pre> and <code>...</code> ---------------------------
+  // Cheap regex sweep — sufficient because the helper only needs to know if a
+  // finding sits *inside* the tag's content; perfect parser fidelity is not
+  // required for a severity-nudge signal.
+  {
+    const tagRe = /<(pre|code)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+    let m;
+    while ((m = tagRe.exec(content)) !== null) {
+      const innerStart = m.index + m[0].indexOf(">") + 1;
+      const innerEnd = m.index + m[0].length - (m[1].length + 3); // </tag>
+      if (innerEnd > innerStart) {
+        codeBlocks.push([innerStart, innerEnd]);
+      }
+    }
+  }
+
+  // --- Markdown blockquotes: lines starting with `>` ----------------------
+  {
+    let lineStart = 0;
+    for (let i = 0; i <= content.length; i++) {
+      if (i === content.length || content.charCodeAt(i) === 0x0a) {
+        // Inspect [lineStart, i).
+        let j = lineStart;
+        while (j < i && (content.charCodeAt(j) === 0x20 || content.charCodeAt(j) === 0x09)) j++;
+        if (j < i && content.charCodeAt(j) === 0x3e /* '>' */) {
+          quotes.push([lineStart, i]);
+        }
+        lineStart = i + 1;
+      }
+    }
+  }
+
+  // --- URL query strings (http/https) -------------------------------------
+  // Match http://... or https://... and pick the substring after the FIRST '?'
+  // up to the URL terminator. We use a permissive URL-char class so query VS
+  // / homoglyph payloads inside the query span are captured.
+  {
+    const urlRe = /https?:\/\/[^\s<>'"`)]+/gi;
+    let m;
+    while ((m = urlRe.exec(content)) !== null) {
+      const full = m[0];
+      const qIdx = full.indexOf("?");
+      if (qIdx === -1) continue;
+      const start = m.index + qIdx + 1;
+      const end = m.index + full.length;
+      if (end > start) urlQueries.push([start, end]);
+    }
+  }
+
+  codeBlocks.sort((a, b) => a[0] - b[0]);
+  quotes.sort((a, b) => a[0] - b[0]);
+  urlQueries.sort((a, b) => a[0] - b[0]);
+  // fileType reserved for future per-format gating (e.g. always-true for
+  // 'markdown'); current logic applies to all text-shaped inputs.
+  void fileType;
+  return { codeBlocks, quotes, urlQueries };
+}
+
+function isInsideAnyRange(pos, ranges) {
+  // Linear scan — ranges are sorted by start so we can early-exit once start>pos.
+  for (const [s, e] of ranges) {
+    if (s > pos) break;
+    if (pos >= s && pos < e) return true;
+  }
+  return false;
+}
+
+/**
+ * v1.19.0 A2: extract context flags for a single finding (position-based).
+ *
+ * Returns `{ inCodeBlock, inQuote, inUrlQuery }` booleans. Findings whose
+ * `position` is missing / non-numeric get all-false (R12 safety: never assume
+ * an unknown anchor lives inside a syntactically-protected span).
+ *
+ * @param {{ codeBlocks: Array, quotes: Array, urlQueries: Array }} ranges
+ * @param {{ position?: number }} finding
+ * @returns {{ inCodeBlock: boolean, inQuote: boolean, inUrlQuery: boolean }}
+ */
+function extractContextFlags(ranges, finding) {
+  const pos = finding && typeof finding.position === "number" ? finding.position : -1;
+  if (pos < 0) return { inCodeBlock: false, inQuote: false, inUrlQuery: false };
+  return {
+    inCodeBlock: isInsideAnyRange(pos, ranges.codeBlocks),
+    inQuote: isInsideAnyRange(pos, ranges.quotes),
+    inUrlQuery: isInsideAnyRange(pos, ranges.urlQueries),
+  };
+}
+
+// Severity one-step-down ladder used by code-fence / quote suppression.
+// `info` / `safe` are floor states — no further demotion.
+const SEVERITY_STEP_DOWN = {
+  danger: "warning",
+  warning: "notice",
+  notice: "info",
+};
+
+/**
+ * R21 hard rule: heading TRANSCRIPT_NOISE suppression already lives in
+ * priority.js#buildTopFindings; do not touch its severity here. Pattern names
+ * listed below are the canonical TRANSCRIPT_NOISE family — context flags are
+ * still attached for downstream tooling, but severity is left alone.
+ */
+const TRANSCRIPT_NOISE_PATTERNS = new Set([
+  "Conversation turn marker",
+  "Alpaca format marker",
+  "Llama2 system marker",
+  "Markdown heading impersonation",
+]);
+
+/**
+ * v1.19.0 A2: walk every finding bucket, attach `meta.{inCodeBlock,inQuote,
+ * inUrlQuery}`, and apply the severity nudge. Mutates `findings` in place.
+ *
+ * Severity policy:
+ *   1. (inCodeBlock || inQuote) and finding is NOT TRANSCRIPT_NOISE / R21 →
+ *      step severity down once via SEVERITY_STEP_DOWN.
+ *   2. invisibleUnicode finding with inUrlQuery=true → severity stepped UP to
+ *      `danger` (if not already), and:
+ *        - VS findings get retagged `technique = 'url-query-variation-selector'`
+ *          (kebab id, suspiciousPatterns category fold — but bucket stays
+ *          invisibleUnicode per R13).
+ *        - Other invisible-unicode findings get retagged
+ *          `technique = 'url-query-invisible-unicode'`.
+ *      `meta.host` / `meta.queryKey` / `meta.codepoint` are added best-effort
+ *      from the URL string around `finding.position`.
+ *
+ * R13 contract: no new top-level byCategory keys; findings stay in their
+ * original bucket. Kebab IDs are emitted via finding.technique and the
+ * separately-added i18n entries, mirroring the v1.15.0 embedded-binary
+ * refactor pattern.
+ */
+function applyContextFlags(content, fileType, findings) {
+  const ranges = buildContextRanges(content, fileType);
+  for (const [bucket, arr] of Object.entries(findings)) {
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr) {
+      const flags = extractContextFlags(ranges, f);
+      if (!flags.inCodeBlock && !flags.inQuote && !flags.inUrlQuery) continue;
+      // Attach meta flags (additive — never clobber existing meta keys).
+      const meta = f.meta && typeof f.meta === "object" ? f.meta : {};
+      if (flags.inCodeBlock) meta.inCodeBlock = true;
+      if (flags.inQuote) meta.inQuote = true;
+      if (flags.inUrlQuery) meta.inUrlQuery = true;
+      f.meta = meta;
+
+      // --- URL-query asymmetry: VS / invisibleUnicode → step UP + kebab id --
+      if (flags.inUrlQuery && bucket === "invisibleUnicode") {
+        const enrichedMeta = enrichUrlQueryMeta(content, ranges.urlQueries, f);
+        Object.assign(f.meta, enrichedMeta);
+        const isVS = f.type === "variationSelector" || (typeof f.char === "string" && /^U\+(FE0[0-9A-F]|E01[0-9A-F][0-9A-F])/.test(f.char));
+        f.technique = isVS
+          ? "url-query-variation-selector"
+          : "url-query-invisible-unicode";
+        // ASCII smuggling inside URL query is high-confidence → upgrade to
+        // danger. Skip if already danger (no-op).
+        if (f.severity !== "danger") f.severity = "danger";
+        continue; // URL-query upgrade wins over code/quote downgrade.
+      }
+
+      // --- Code-fence / quote suppression ----------------------------------
+      if (flags.inCodeBlock || flags.inQuote) {
+        // R21 hard rule: heading TRANSCRIPT_NOISE patterns keep their severity
+        // (and their 3-hit banner gating in priority.js handles the FP risk).
+        const patternName = f.pattern;
+        if (
+          bucket === "suspiciousPatterns" &&
+          typeof patternName === "string" &&
+          TRANSCRIPT_NOISE_PATTERNS.has(patternName)
+        ) {
+          continue;
+        }
+        const cur = f.severity;
+        const next = SEVERITY_STEP_DOWN[cur];
+        if (next) f.severity = next;
+      }
+    }
+  }
+}
+
+/**
+ * Best-effort: pull (host, queryKey, codepoint) out of the URL around a
+ * `finding.position`. Returns a plain object suitable for `Object.assign` onto
+ * meta. Never throws; on any parse miss returns `{}`.
+ */
+function enrichUrlQueryMeta(content, urlQueries, finding) {
+  const pos = finding && typeof finding.position === "number" ? finding.position : -1;
+  if (pos < 0) return {};
+  // Find the enclosing URL-query range, then walk backward to the http(s):// start.
+  let qStart = -1;
+  let qEnd = -1;
+  for (const [s, e] of urlQueries) {
+    if (s > pos) break;
+    if (pos >= s && pos < e) { qStart = s; qEnd = e; break; }
+  }
+  if (qStart < 0) return {};
+  // Backward search for the URL scheme.
+  const headWin = content.slice(Math.max(0, qStart - 2048), qStart);
+  const schemeMatch = headWin.match(/https?:\/\/[^\s<>'"`)]+\?$/i);
+  let host = null;
+  if (schemeMatch) {
+    const urlHead = schemeMatch[0];
+    const hostMatch = urlHead.match(/^https?:\/\/([^\/?#]+)/i);
+    if (hostMatch) host = hostMatch[1].toLowerCase();
+  }
+  // Query key: scan back from `pos` to the previous `?` or `&`, then up to `=`.
+  let keyStart = pos;
+  while (keyStart > qStart && content[keyStart - 1] !== "&" && content[keyStart - 1] !== "?") {
+    keyStart--;
+  }
+  let keyEnd = keyStart;
+  while (keyEnd < qEnd && content[keyEnd] !== "=" && content[keyEnd] !== "&") {
+    keyEnd++;
+  }
+  // R12 (critical): never echo raw user text into meta. We only surface the
+  // CODEPOINT (numeric) of the offending char, plus the host (parsed by URL
+  // grammar) and queryKey *length* — not the key itself, which is attacker-
+  // controllable.
+  const cp = content.codePointAt(pos);
+  const out = {};
+  if (host) out.host = host;
+  if (keyEnd > keyStart) out.queryKey = `key#${keyEnd - keyStart}`;
+  if (typeof cp === "number") out.codepoint = `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
+  return out;
 }
 
 /**
@@ -475,6 +884,15 @@ function buildSummary(findings, extras = {}) {
     // so the v1.7.0 summary shape is unchanged for non-archive callers (R13
     // baseline.test.js stays green without rewrites).
     ...(extras && extras.archive ? { archive: extras.archive } : {}),
+    // v1.18.0: streaming flags (sibling keys). Only emitted when analyze()
+    // determined the input crossed the streaming threshold (>5MB). Both keys
+    // are added together so callers can branch on `summary.streamed`.
+    ...(extras && extras.streaming
+      ? {
+          streamed: extras.streaming.streamed,
+          chunkCount: extras.streaming.chunkCount,
+        }
+      : {}),
   };
 }
 

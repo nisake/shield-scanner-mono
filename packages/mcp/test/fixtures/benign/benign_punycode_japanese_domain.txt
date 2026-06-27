@@ -1,0 +1,4 @@
+Refer to the JP-IDN sample (legitimate Japanese .jp brand domain):
+https://xn--eckwd4c7c.xn--zckzah/info
+This decodes to a pure-Japanese (Hiragana/Kanji) host without any Latin
+character mixing, so it must NOT fire punycode-host-homograph.

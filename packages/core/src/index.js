@@ -15,14 +15,167 @@
  */
 
 // Pipeline orchestration
+import {
+  analyze as _analyzeImpl,
+  ALL_CATEGORIES as _ALL_CATEGORIES,
+} from "./detector.js";
 export {
-  analyze,
   ALL_CATEGORIES,
   mergeFindings,
   enrichFindingsLocation,
   formatReport,
 } from "./detector.js";
 export { sanitize, stripFormulaPrefix } from "./sanitizer.js";
+
+// v1.18.0 — detector benchmark / profile hook.
+// analyze() gains an optional `options.profile:true` flag. When set, the
+// returned `result.summary.profile` carries per-detector timing:
+//   profile = {
+//     totalMs: number,   // wall-clock for the whole analyze() call
+//     detectors: [       // ordered, one entry per measured detector
+//       { name: "invisibleUnicode", ms: 1.234, calls: 1 },
+//       ...
+//     ],
+//   }
+// When `profile` is absent / false, `summary.profile` is omitted entirely so
+// the v1.17.x summary shape (R13 5-bucket byCategory + sibling keys) is
+// byte-identical for every existing caller. The detector pipeline itself is
+// re-run in profile mode using the same individual detectors that
+// detector.js wires (re-imported here as private locals) — we do NOT touch
+// detector.js or any leaf detector module to preserve the byte-identical
+// MCP↔Web parity contract on the non-profile path.
+import { detectInvisibleUnicode as _detectInvisibleUnicodeImpl } from "./invisible-unicode.js";
+import { detectVariationSelectors as _detectVariationSelectorsImpl } from "./variation-selectors.js";
+import { detectCombiningChars as _detectCombiningCharsImpl } from "./combining-chars.js";
+import { detectControlChars as _detectControlCharsImpl } from "./control-chars.js";
+import { detectHiddenElements as _detectHiddenElementsImpl } from "./hidden-elements.js";
+import { detectMarkdownExfil as _detectMarkdownExfilImpl } from "./markdown-exfil.js";
+import {
+  detectSuspiciousPatterns as _detectSuspiciousPatternsImpl,
+  scanShadowForSuspiciousPatterns as _scanShadowForSuspiciousPatternsImpl,
+} from "./suspicious-patterns.js";
+import { detectHomoglyphs as _detectHomoglyphsImpl } from "./homoglyphs.js";
+import { detectMathBypass as _detectMathBypassImpl } from "./math-bypass.js";
+import { detectFormulaInjection as _detectFormulaInjectionImpl } from "./formula-injection.js";
+import {
+  buildInvisibleStrippedShadow as _buildInvisibleStrippedShadowImpl,
+  buildNfkcShadow as _buildNfkcShadowImpl,
+} from "./shadow-copy.js";
+
+// HTML-comment / hidden-element sweep gate. Must match detector.js exactly so
+// the profile pass walks the same detectors that the non-profile pass would.
+const _HIDDEN_ELEMENT_FILETYPES_PROFILE = new Set(["html", "markdown"]);
+
+function _perfNow() {
+  // Prefer the standard `performance.now()` when available (Node >= 16,
+  // browsers). Falls back to Date.now() in environments that lack it (the
+  // bench harness explicitly forbids unguarded Date.now() at runtime — but a
+  // fallback is acceptable here because profile mode is opt-in / dev-only).
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+/**
+ * Public analyze() — pass-through to the orchestrator on the default path.
+ * Adds `summary.profile` only when `options.profile === true`.
+ */
+export function analyze(content, options = {}) {
+  if (!options || options.profile !== true) {
+    return _analyzeImpl(content, options);
+  }
+
+  const fileType = options.fileType || "text";
+  const categories = options.categories || _ALL_CATEGORIES;
+  const wanted = new Set(categories);
+
+  const t0 = _perfNow();
+  const samples = [];
+  function _measure(name, fn) {
+    const s = _perfNow();
+    const out = fn();
+    const e = _perfNow();
+    samples.push({ name, ms: e - s, calls: 1 });
+    return out;
+  }
+
+  // Run each detector individually (timed) so we can attach per-call ms to
+  // the result. We deliberately rebuild the same fold pattern detector.js
+  // uses — folding VS + combining into invisibleUnicode, etc. — but only to
+  // produce the profile table. The canonical analyze() call (below) is what
+  // produces the actual findings + summary so we never diverge from the
+  // single source of truth on the user-visible output.
+  if (wanted.has("invisibleUnicode")) {
+    _measure("invisibleUnicode", () => _detectInvisibleUnicodeImpl(content));
+    _measure("variationSelectors", () => _detectVariationSelectorsImpl(content));
+    _measure("combiningChars", () => _detectCombiningCharsImpl(content));
+  }
+  if (wanted.has("controlChars")) {
+    _measure("controlChars", () => _detectControlCharsImpl(content));
+  }
+  if (
+    wanted.has("hiddenHtml") &&
+    _HIDDEN_ELEMENT_FILETYPES_PROFILE.has(fileType)
+  ) {
+    _measure("hiddenElements", () => _detectHiddenElementsImpl(content));
+    _measure("markdownExfil", () => _detectMarkdownExfilImpl(content));
+  }
+  if (wanted.has("suspiciousPatterns")) {
+    _measure("suspiciousPatterns", () => _detectSuspiciousPatternsImpl(content));
+    const invStripped = _measure("buildInvisibleStrippedShadow", () =>
+      _buildInvisibleStrippedShadowImpl(content)
+    );
+    if (invStripped) {
+      _measure("shadowSuspiciousInvisibleStripped", () =>
+        _scanShadowForSuspiciousPatternsImpl(
+          invStripped.shadow,
+          invStripped.shadowToOrig,
+          "invisibleStripped",
+          content
+        )
+      );
+    }
+    const nfkc = _measure("buildNfkcShadow", () => _buildNfkcShadowImpl(content));
+    if (nfkc) {
+      _measure("shadowSuspiciousNfkc", () =>
+        _scanShadowForSuspiciousPatternsImpl(
+          nfkc.shadow,
+          nfkc.shadowToOrig,
+          "nfkcNormalized",
+          content
+        )
+      );
+    }
+    if (fileType === "xlsx" || fileType === "csv") {
+      _measure("formulaInjection", () =>
+        _detectFormulaInjectionImpl(content, fileType)
+      );
+    }
+  }
+  if (wanted.has("homoglyphs")) {
+    _measure("homoglyphs", () => _detectHomoglyphsImpl(content));
+    _measure("mathBypass", () => _detectMathBypassImpl(content));
+  }
+
+  // Canonical pass — produces the actual findings/summary. This is the same
+  // call site every other consumer uses, so byte-identical output is
+  // guaranteed by construction.
+  const result = _analyzeImpl(content, options);
+  const t1 = _perfNow();
+
+  // Attach the profile as a sibling key under `summary` (next to `bidiControl`
+  // / `topFindings` / `archive`). R13 5-bucket `byCategory` invariant is NOT
+  // touched.
+  result.summary = {
+    ...result.summary,
+    profile: {
+      totalMs: t1 - t0,
+      detectors: samples,
+    },
+  };
+  return result;
+}
 
 // S10: CSV/XLSX formula-injection detector + OPC helpers (shared by xlsx /
 // docx / pptx parsers). Lives under the existing suspiciousPatterns bucket —
@@ -119,3 +272,21 @@ export {
   PDF_STRUCT_CAPS,
   sanitizeStructKey,
 } from "./pdf-struct.js";
+
+// v1.19.0 B4: Structured-text frontmatter detector (YAML / TOML / JSON-LD).
+// Auto-fires on markdown frontmatter + JSON-LD; standalone .yml/.yaml/.toml
+// files are dispatched via the parser registry with fileType="yaml"|"toml".
+// Findings land in the existing suspiciousPatterns bucket (R13 fold).
+export { detectStructuredTextFrontmatter } from "./structured-text-frontmatter.js";
+
+// v1.19.0 D1: Encoded payload decode pipeline (Base64 / Hex / Punycode /
+// HTML entity). Pure detector — runs on every analyze() call regardless of
+// fileType. Findings land in the existing suspiciousPatterns bucket (R13
+// fold). R12: decoded raw text NEVER appears in any finding field; only
+// kebab id + raw byte-range meta + enum encoding class are surfaced.
+export {
+  detectEncodedPayloads,
+  ENCODED_DECODER_CAPS,
+  ENCODED_KEBAB,
+  ENCODED_PLACEHOLDER_MATCHED,
+} from "./encoded-decoder.js";

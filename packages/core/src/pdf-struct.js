@@ -58,13 +58,56 @@ export const PDF_STRUCT_CAPS = Object.freeze({
   MAX_TEXT_LEN: 500,
 });
 
-// Roles that pdf.js / role-map can resolve to an image-bearing structure
-// element. Spec-aligned standard structure types: Figure, Formula, Form. We
-// surface Formula and Form alongside Figure because (a) both can hold image
-// XObjects with /Alt or /ActualText, and (b) both have the same prompt-
-// injection threat model — caption-style text the document author controls
-// that flows past the rasterized image.
-const IMAGE_ROLES = Object.freeze(new Set(["Figure", "Formula", "Form"]));
+// Roles whose /Alt or /ActualText the walker surfaces. Spec-aligned standard
+// structure types we cover (v1.19.0): Figure, Formula, Form, Sect, L, Table,
+// Caption, TOC, TOCI, Index, LI, Note, H1, H2, H3, H4, H5, H6, BlockQuote,
+// Quote, Span.
+// Originally introduced (v1.12.0/v1.13.0) as "IMAGE_ROLES" for image-bearing
+// elements (Figure / Formula / Form). v1.15.0 Theme C extended the set to
+// section / list / table containers (Sect / L / Table) because their /Alt and
+// /ActualText carry the same caption-style attacker-controlled text
+// (screen-reader metadata channel) — the threat model is identical, only the
+// spec-defined role name differs. Renamed to STRUCT_ROLES to truthfully
+// describe the generalization. v1.16.0 Theme T-B further extends the set with
+// 6 more standard structure types (ISO 32000-1 §14.8.4): Caption (figure /
+// table caption — highest-leverage screen-reader metadata channel), TOC + TOCI
+// (table-of-contents container + per-item), Index (alphabetical reference
+// container), LI (list-item child of L, closes the L/LI granularity gap), and
+// Note (inline footnote/endnote). v1.19.0 A3 further extends with 9 more
+// standard structure types (ISO 32000-1 §14.8.4): H1-H6 (heading levels 1-6 —
+// high-leverage TTS / outline metadata channel; the heading role is the most
+// commonly-tagged element in real-world accessible PDFs alongside P), BlockQuote
+// (block-level quotation container — common channel for "quoted from another
+// document" payloads), Quote (inline quotation — short-form sibling of
+// BlockQuote), and Span (generic inline-level element used for screen-reader
+// hints and inline metadata, identical threat model to Caption). All wire
+// identically via the walker — pure Set-literal extension, zero walker logic
+// changes.
+const STRUCT_ROLES = Object.freeze(
+  new Set([
+    "Figure",
+    "Formula",
+    "Form",
+    "Sect",
+    "L",
+    "Table",
+    "Caption",
+    "TOC",
+    "TOCI",
+    "Index",
+    "LI",
+    "Note",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "BlockQuote",
+    "Quote",
+    "Span",
+  ]),
+);
 
 /**
  * Walk a pdf.js StructTreeNode (the value returned by `page.getStructTree()`)
@@ -75,7 +118,7 @@ const IMAGE_ROLES = Object.freeze(new Set(["Figure", "Formula", "Form"]));
  *
  * Each yielded record:
  *   {
- *     role: string,              // 'Figure' | 'Formula' | 'Form'
+ *     role: string,              // 'Figure' | 'Formula' | 'Form' | 'Sect' | 'L' | 'Table' | 'Caption' | 'TOC' | 'TOCI' | 'Index' | 'LI' | 'Note' | 'H1'..'H6' | 'BlockQuote' | 'Quote' | 'Span'
  *     alt: string,               // /Alt value, truncated to MAX_TEXT_LEN
  *     actualText: string,        // /ActualText value, truncated to MAX_TEXT_LEN
  *     pathSegments: number[],    // child indexes from root to this node
@@ -90,7 +133,7 @@ const IMAGE_ROLES = Object.freeze(new Set(["Figure", "Formula", "Form"]));
  *   - cycle (visited Set) → revisit skipped silently
  *
  * @param {{ role?: string, children?: Array, alt?: string, actualText?: string }} rootNode
- * @param {{ maxDepth?: number, maxNodes?: number, maxTextLen?: number, imageRoles?: Set<string> }} [opts]
+ * @param {{ maxDepth?: number, maxNodes?: number, maxTextLen?: number, structRoles?: Set<string> }} [opts]
  * @returns {{ records: Array<{role:string, alt:string, actualText:string, pathSegments:number[]}>, capExceeded: boolean, nodeCount: number }}
  */
 export function walkStructTree(rootNode, opts = {}) {
@@ -101,7 +144,7 @@ export function walkStructTree(rootNode, opts = {}) {
   const MAX_DEPTH = Number.isInteger(opts.maxDepth) ? opts.maxDepth : PDF_STRUCT_CAPS.MAX_DEPTH;
   const MAX_NODES = Number.isInteger(opts.maxNodes) ? opts.maxNodes : PDF_STRUCT_CAPS.MAX_NODES;
   const MAX_TEXT_LEN = Number.isInteger(opts.maxTextLen) ? opts.maxTextLen : PDF_STRUCT_CAPS.MAX_TEXT_LEN;
-  const imageRoles = opts.imageRoles instanceof Set ? opts.imageRoles : IMAGE_ROLES;
+  const structRoles = opts.structRoles instanceof Set ? opts.structRoles : STRUCT_ROLES;
 
   // Cycle defense: identity-based Set so two distinct nodes with the same
   // role+alt don't collide. pdf.js's serializer hands us a fresh object graph
@@ -133,7 +176,7 @@ export function walkStructTree(rootNode, opts = {}) {
     // from the nodeCount tick.
     const role = typeof node.role === "string" ? node.role : "";
 
-    if (role && imageRoles.has(role)) {
+    if (role && structRoles.has(role)) {
       // pdf.js sets `obj.alt` from /Alt OR /ActualText (Alt wins, ActualText
       // fallback) — see pdf.worker.mjs ~L41104. We surface both fields as
       // separate slots so synthetic test mocks (which can set both) and any

@@ -26,6 +26,16 @@ const OFFICE_IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "tiff", 
 const OFFICE_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 const OFFICE_MEDIA_MAX_COUNT = 50;
 
+// v1.18.0 Follina: Office Compound File Binary (CFB) magic — D0 CF 11 E0 A1 B1 1A E1.
+// Matches the XLSX parser's CFB_MAGIC constant.
+const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+// v1.18.0 Follina: Remote-URL prefix allow-list for attachedTemplate /
+// webSettings detection. file:// is included because CVE-2023-36884 abused
+// UNC paths to fetch remote .dotm templates via SMB. http(s) covers the
+// classic CVE-2022-30190 Follina shape.
+const REMOTE_URL_PREFIX_RE = /^(?:https?:|file:|\\\\)/i;
+
 export async function parseDocx(filePath) {
   const buffer = await readFile(filePath);
   return parseDocxBuffer(buffer);
@@ -57,9 +67,10 @@ export async function parseDocxBuffer(buffer) {
     let vm;
     while ((vm = vanishRegex.exec(xml)) !== null) {
       if (vm[1] && vm[1].trim()) {
+        // v1.17.0 T4: kebab ID, R12 invariant (no dynamic value baked in)
         extraFindings.push({
           element: "w:r (Word run)",
-          technique: "Hidden text (w:vanish)",
+          technique: "hidden-text-vanish",
           content: escapeForDisplay(vm[1].slice(0, 200)),
           severity: "danger",
         });
@@ -72,9 +83,11 @@ export async function parseDocxBuffer(buffer) {
     let cm;
     while ((cm = colorHideRegex.exec(xml)) !== null) {
       if (cm[1] && cm[1].trim()) {
+        // v1.17.0 T4: kebab ID, R12 invariant (color isolated in meta)
         extraFindings.push({
           element: "w:r (Word run)",
-          technique: "White font color (#FFFFFF)",
+          technique: "white-font-color",
+          meta: { color: "FFFFFF" },
           content: escapeForDisplay(cm[1].slice(0, 200)),
           severity: "danger",
         });
@@ -164,9 +177,10 @@ export async function parseDocxBuffer(buffer) {
       const inner = dm[1];
       if (!inner || !inner.trim()) continue;
       const severity = looksLikeInstruction(inner) ? "danger" : "warning";
+      // v1.17.0 T4: kebab ID, R12 invariant (no dynamic value baked in)
       extraFindings.push({
         element: "w:del (Tracked-change deletion)",
-        technique: "Tracked-change deletion residue (w:del/w:delText)",
+        technique: "tracked-change-deletion",
         content: escapeForDisplay(inner.slice(0, 200)),
         severity,
       });
@@ -196,9 +210,10 @@ export async function parseDocxBuffer(buffer) {
       // danger; otherwise warning so unusual fields still surface.
       let severity = "warning";
       if (hasUrl || looksInst) severity = "danger";
+      // v1.17.0 T4: kebab ID, R12 invariant (no dynamic value baked in)
       extraFindings.push({
         element: "w:instrText (Word field)",
-        technique: "Field instruction (HYPERLINK / MERGEFIELD / etc.)",
+        technique: "field-instruction",
         content: escapeForDisplay(inner.slice(0, 200)),
         severity,
       });
@@ -233,15 +248,152 @@ export async function parseDocxBuffer(buffer) {
         const value = sm[2];
         if (!value || !value.trim()) continue;
         if (!looksLikeInstruction(value)) continue;
+        // v1.17.0 T4: kebab ID, R12 invariant (provenance carried by element)
         extraFindings.push({
           element: `docProps custom:${escapeForDisplay(name)}`,
-          technique: "Custom property with instruction-like text",
+          technique: "custom-property-instruction",
           content: escapeForDisplay(value.slice(0, 200)),
           severity: "warning",
           category: "suspiciousPatterns",
         });
       }
     }
+  }
+
+  // --- v1.18.0 Follina: word/settings.xml attachedTemplate remote fetch ---
+  // CVE-2022-30190 (Follina) and CVE-2023-36884 abused this surface to fetch
+  // a remote .dotm template that carries the actual payload. The relationship
+  // id points at word/_rels/settings.xml.rels which carries the target URL —
+  // we resolve the rId through the .rels file when present, otherwise fall
+  // back to scanning .rels for any http/https/file/UNC target whose Type is
+  // attachedTemplate.
+  const settingsXml = zip.file("word/settings.xml");
+  if (settingsXml) {
+    const sxml = await settingsXml.async("string");
+    const atMatch = sxml.match(/<w:attachedTemplate\b[^>]*\br:id\s*=\s*"([^"]+)"/i);
+    if (atMatch) {
+      const rId = atMatch[1];
+      const relsEntry = zip.file("word/_rels/settings.xml.rels");
+      let templateUrl = null;
+      if (relsEntry) {
+        const relsXml = await relsEntry.async("string");
+        const relRe = /<Relationship\b[^>]*\bId\s*=\s*"([^"]+)"[^>]*\bTarget\s*=\s*"([^"]+)"/gi;
+        let rm;
+        while ((rm = relRe.exec(relsXml)) !== null) {
+          if (rm[1] === rId && REMOTE_URL_PREFIX_RE.test(rm[2])) {
+            templateUrl = rm[2];
+            break;
+          }
+        }
+      }
+      if (templateUrl) {
+        // v1.18.0 Follina: kebab ID + meta-only URL (R12 invariant — raw URL
+        // lives in meta.templateUrl, never baked into the technique label).
+        extraFindings.push({
+          element: "w:attachedTemplate (Word settings)",
+          technique: "docx-attached-template-remote",
+          content: escapeForDisplay(templateUrl.slice(0, 200)),
+          severity: "danger",
+          category: "suspiciousPatterns",
+          meta: { templateUrl: escapeForDisplay(templateUrl.slice(0, 500)) },
+        });
+      }
+    }
+  }
+
+  // --- v1.18.0 Follina: word/webSettings.xml external frameset load ---
+  // <w:frameset> + <w:frame w:src="..."/> can pull external content into the
+  // Word document on open. Same threat class as attachedTemplate but via the
+  // webSettings part. We surface only when src points at a remote scheme.
+  const webSettingsXml = zip.file("word/webSettings.xml");
+  if (webSettingsXml) {
+    const wxml = await webSettingsXml.async("string");
+    const frameRe = /<w:frame\b[^>]*\bw:src\s*=\s*"([^"]+)"/gi;
+    let fm;
+    while ((fm = frameRe.exec(wxml)) !== null) {
+      const src = fm[1];
+      if (!src || !REMOTE_URL_PREFIX_RE.test(src)) continue;
+      extraFindings.push({
+        element: "w:frame (Word webSettings frameset)",
+        technique: "docx-websettings-external-load",
+        content: escapeForDisplay(src.slice(0, 200)),
+        severity: "danger",
+        category: "suspiciousPatterns",
+        meta: { templateUrl: escapeForDisplay(src.slice(0, 500)) },
+      });
+    }
+  }
+
+  // --- v1.18.0 Follina: customXml/item*.xml instruction phrases ---
+  // customXml is a quiet text carrier — viewers never render it, but it's
+  // packaged with the document and parseable by anything reading the OOXML
+  // tree. Walk every customXml/item*.xml, extract text content, and surface
+  // entries that look like instructions.
+  const customXmlItems = Object.keys(zip.files).filter((f) =>
+    /^customXml\/item\d+\.xml$/i.test(f),
+  );
+  for (const itemPath of customXmlItems) {
+    const entry = zip.file(itemPath);
+    if (!entry) continue;
+    let ixml;
+    try {
+      ixml = await entry.async("string");
+    } catch {
+      continue;
+    }
+    if (!ixml || !ixml.trim()) continue;
+    // Strip XML tags to get a flat text view (decoder-friendly).
+    const flat = ixml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!flat) continue;
+    if (!looksLikeInstruction(flat)) continue;
+    extraFindings.push({
+      element: `customXml ${itemPath.replace(/^customXml\//, "")}`,
+      technique: "docx-customxml-instruction",
+      content: escapeForDisplay(flat.slice(0, 200)),
+      severity: "warning",
+      category: "suspiciousPatterns",
+    });
+  }
+
+  // --- v1.18.0 Follina: word/embeddings/oleObject*.bin CFB OLE detection ---
+  // OLE objects packaged into a Word document carry CFB magic
+  // (D0 CF 11 E0 A1 B1 1A E1). Following the XLSX scanEmbeddings shape,
+  // we cap by OFFICE_MEDIA_MAX_BYTES and emit one finding per CFB-magic
+  // entry. The kebab id is shared with PPTX (office-embedded-ole-cfb)
+  // because the surface is identical across both formats.
+  const embeddingFiles = Object.keys(zip.files).filter((f) =>
+    /^word\/embeddings\/[^/]+\.bin$/i.test(f),
+  );
+  for (const ef of embeddingFiles) {
+    const entry = zip.file(ef);
+    if (!entry) continue;
+    let buf;
+    try {
+      buf = await entry.async("nodebuffer");
+    } catch {
+      continue;
+    }
+    if (buf.length > OFFICE_MEDIA_MAX_BYTES) continue;
+    let hasCfbMagic = false;
+    if (buf.length >= 8) {
+      hasCfbMagic = true;
+      for (let i = 0; i < 8; i++) {
+        if (buf[i] !== CFB_MAGIC[i]) {
+          hasCfbMagic = false;
+          break;
+        }
+      }
+    }
+    if (!hasCfbMagic) continue;
+    extraFindings.push({
+      element: "DOCX Embedded OLE",
+      technique: "office-embedded-ole-cfb",
+      content: escapeForDisplay(ef.slice(0, 200)),
+      severity: "warning",
+      category: "suspiciousPatterns",
+      contextLocation: ef,
+      meta: { embeddingPath: ef, hasCfbMagic: true },
+    });
   }
 
   // --- Comments ---
@@ -253,9 +405,10 @@ export async function parseDocxBuffer(buffer) {
       .map((m) => m.replace(/<[^>]+>/g, ""))
       .join(" ");
     if (commentContent.trim() && looksLikeInstruction(commentContent)) {
+      // v1.17.0 T4: kebab ID, R12 invariant (no dynamic value baked in)
       extraFindings.push({
         element: "Word Comment",
-        technique: "Comment with instruction-like text",
+        technique: "comment-instruction",
         content: escapeForDisplay(commentContent.slice(0, 200)),
         severity: "warning",
       });
@@ -303,13 +456,25 @@ export async function parseDocxBuffer(buffer) {
     } catch {
       continue;
     }
-    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+    if (buf.length === 0) {
       extraFindings.push({
         element: "DOCX Embedded Image",
-        technique: `Oversize embedded image skipped (> ${OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: "empty-embedded-image",
         content: escapeForDisplay(mediaName.slice(0, 200)),
         severity: "warning",
         contextLocation: `DOCX media:${mediaName}`,
+      });
+      mediaProcessed++;
+      continue;
+    }
+    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+      extraFindings.push({
+        element: "DOCX Embedded Image",
+        technique: "oversize-embedded-image",
+        content: escapeForDisplay(mediaName.slice(0, 200)),
+        severity: "warning",
+        contextLocation: `DOCX media:${mediaName}`,
+        meta: { maxBytes: OFFICE_MEDIA_MAX_BYTES },
       });
       mediaProcessed++;
       continue;

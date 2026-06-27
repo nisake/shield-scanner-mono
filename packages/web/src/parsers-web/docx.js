@@ -26,9 +26,10 @@ async function parseDocx(buffer) {
     let vm;
     while ((vm = vanishRegex.exec(xml)) !== null) {
       if (vm[1] && vm[1].trim()) {
+        // v1.17.0 T4: kebab ID, R12 invariant (no dynamic value baked in)
         hiddenFindings.push({
           element: 'w:r (Word run)',
-          technique: 'Hidden text (w:vanish)',
+          technique: 'hidden-text-vanish',
           content: escapeForDisplay(vm[1].slice(0, 200)),
           severity: 'danger',
         });
@@ -198,6 +199,113 @@ async function parseDocx(buffer) {
     }
   }
 
+  // v1.18.0 Follina (web mirror, byte-identical with MCP docx.js).
+  // ---- attachedTemplate remote fetch (CVE-2022-30190 / CVE-2023-36884) ----
+  const _CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+  const _REMOTE_URL_PREFIX_RE = /^(?:https?:|file:|\\\\)/i;
+  const settingsXmlEntry = zip.file('word/settings.xml');
+  if (settingsXmlEntry) {
+    const sxml = await settingsXmlEntry.async('string');
+    const atMatch = sxml.match(/<w:attachedTemplate\b[^>]*\br:id\s*=\s*"([^"]+)"/i);
+    if (atMatch) {
+      const rId = atMatch[1];
+      const relsEntry = zip.file('word/_rels/settings.xml.rels');
+      let templateUrl = null;
+      if (relsEntry) {
+        const relsXml = await relsEntry.async('string');
+        const relRe = /<Relationship\b[^>]*\bId\s*=\s*"([^"]+)"[^>]*\bTarget\s*=\s*"([^"]+)"/gi;
+        let rm;
+        while ((rm = relRe.exec(relsXml)) !== null) {
+          if (rm[1] === rId && _REMOTE_URL_PREFIX_RE.test(rm[2])) {
+            templateUrl = rm[2];
+            break;
+          }
+        }
+      }
+      if (templateUrl) {
+        hiddenFindings.push({
+          element: 'w:attachedTemplate (Word settings)',
+          technique: 'docx-attached-template-remote',
+          content: escapeForDisplay(templateUrl.slice(0, 200)),
+          severity: 'danger',
+          category: 'suspiciousPatterns',
+          meta: { templateUrl: escapeForDisplay(templateUrl.slice(0, 500)) },
+        });
+      }
+    }
+  }
+
+  // ---- webSettings.xml external frameset load ----
+  const webSettingsXmlEntry = zip.file('word/webSettings.xml');
+  if (webSettingsXmlEntry) {
+    const wxml = await webSettingsXmlEntry.async('string');
+    const frameRe = /<w:frame\b[^>]*\bw:src\s*=\s*"([^"]+)"/gi;
+    let fm;
+    while ((fm = frameRe.exec(wxml)) !== null) {
+      const src = fm[1];
+      if (!src || !_REMOTE_URL_PREFIX_RE.test(src)) continue;
+      hiddenFindings.push({
+        element: 'w:frame (Word webSettings frameset)',
+        technique: 'docx-websettings-external-load',
+        content: escapeForDisplay(src.slice(0, 200)),
+        severity: 'danger',
+        category: 'suspiciousPatterns',
+        meta: { templateUrl: escapeForDisplay(src.slice(0, 500)) },
+      });
+    }
+  }
+
+  // ---- customXml/item*.xml instruction phrases ----
+  const customXmlItems = Object.keys(zip.files).filter(f => /^customXml\/item\d+\.xml$/i.test(f));
+  for (const itemPath of customXmlItems) {
+    const entry = zip.file(itemPath);
+    if (!entry) continue;
+    let ixml;
+    try { ixml = await entry.async('string'); } catch { continue; }
+    if (!ixml || !ixml.trim()) continue;
+    const flat = ixml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!flat) continue;
+    if (!looksLikeInstruction(flat)) continue;
+    hiddenFindings.push({
+      element: `customXml ${itemPath.replace(/^customXml\//, '')}`,
+      technique: 'docx-customxml-instruction',
+      content: escapeForDisplay(flat.slice(0, 200)),
+      severity: 'warning',
+      category: 'suspiciousPatterns',
+    });
+  }
+
+  // ---- word/embeddings/*.bin CFB OLE detection ----
+  const _OFFICE_EMBED_MAX_BYTES = 5 * 1024 * 1024;
+  const embeddingFiles = Object.keys(zip.files).filter(f => /^word\/embeddings\/[^/]+\.bin$/i.test(f));
+  for (const ef of embeddingFiles) {
+    const entry = zip.file(ef);
+    if (!entry) continue;
+    let buf;
+    try { buf = await entry.async('uint8array'); } catch { continue; }
+    if (buf.byteLength > _OFFICE_EMBED_MAX_BYTES) continue;
+    let hasCfbMagic = false;
+    if (buf.byteLength >= 8) {
+      hasCfbMagic = true;
+      for (let i = 0; i < 8; i++) {
+        if (buf[i] !== _CFB_MAGIC[i]) {
+          hasCfbMagic = false;
+          break;
+        }
+      }
+    }
+    if (!hasCfbMagic) continue;
+    hiddenFindings.push({
+      element: 'DOCX Embedded OLE',
+      technique: 'office-embedded-ole-cfb',
+      content: escapeForDisplay(ef.slice(0, 200)),
+      severity: 'warning',
+      category: 'suspiciousPatterns',
+      contextLocation: ef,
+      meta: { embeddingPath: ef, hasCfbMagic: true },
+    });
+  }
+
   // Check comments (word/comments.xml)
   const commentsXml = zip.file('word/comments.xml');
   if (commentsXml) {
@@ -249,13 +357,25 @@ async function parseDocx(buffer) {
     try {
       buf = await entry.async('uint8array');
     } catch { continue; }
-    if (buf.byteLength > _OFFICE_MEDIA_MAX_BYTES) {
+    if (buf.byteLength === 0) {
       hiddenFindings.push({
         element: 'DOCX Embedded Image',
-        technique: `Oversize embedded image skipped (> ${_OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: 'empty-embedded-image',
         content: escapeForDisplay(mediaName.slice(0, 200)),
         severity: 'warning',
         contextLocation: `DOCX media:${mediaName}`,
+      });
+      mediaProcessed++;
+      continue;
+    }
+    if (buf.byteLength > _OFFICE_MEDIA_MAX_BYTES) {
+      hiddenFindings.push({
+        element: 'DOCX Embedded Image',
+        technique: 'oversize-embedded-image',
+        content: escapeForDisplay(mediaName.slice(0, 200)),
+        severity: 'warning',
+        contextLocation: `DOCX media:${mediaName}`,
+        meta: { maxBytes: _OFFICE_MEDIA_MAX_BYTES },
       });
       mediaProcessed++;
       continue;

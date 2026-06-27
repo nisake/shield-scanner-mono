@@ -226,13 +226,25 @@ async function parsePptx(buffer) {
     try {
       buf = await entry.async('uint8array');
     } catch { continue; }
-    if (buf.byteLength > _OFFICE_MEDIA_MAX_BYTES) {
+    if (buf.byteLength === 0) {
       hiddenFindings.push({
         element: 'PPTX Embedded Image',
-        technique: `Oversize embedded image skipped (> ${_OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: 'empty-embedded-image',
         content: escapeForDisplay(mediaName.slice(0, 200)),
         severity: 'warning',
         contextLocation: `PPTX media:${mediaName}`,
+      });
+      pptxMediaProcessed++;
+      continue;
+    }
+    if (buf.byteLength > _OFFICE_MEDIA_MAX_BYTES) {
+      hiddenFindings.push({
+        element: 'PPTX Embedded Image',
+        technique: 'oversize-embedded-image',
+        content: escapeForDisplay(mediaName.slice(0, 200)),
+        severity: 'warning',
+        contextLocation: `PPTX media:${mediaName}`,
+        meta: { maxBytes: _OFFICE_MEDIA_MAX_BYTES },
       });
       pptxMediaProcessed++;
       continue;
@@ -256,6 +268,75 @@ async function parsePptx(buffer) {
         });
       }
     }
+  }
+
+  // v1.18.0 Follina (web mirror, byte-identical with MCP pptx.js).
+  // ---- ppt/_rels/presentation.xml.rels external template ----
+  const _CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+  const _REMOTE_URL_PREFIX_RE = /^(?:https?:|file:|\\\\)/i;
+  const _REMOTE_TEMPLATE_REL_TYPES = [
+    'slideMaster',
+    'notesMaster',
+    'handoutMaster',
+    'theme',
+    'presProps',
+    'attachedTemplate',
+  ];
+  const _OFFICE_EMBED_MAX_BYTES = 5 * 1024 * 1024;
+  const presRelsEntry = zip.file('ppt/_rels/presentation.xml.rels');
+  if (presRelsEntry) {
+    const relsXml = await presRelsEntry.async('string');
+    const relRe = /<Relationship\b[^>]*\bType\s*=\s*"([^"]+)"[^>]*\bTarget\s*=\s*"([^"]+)"([^>]*)>/gi;
+    let rm;
+    while ((rm = relRe.exec(relsXml)) !== null) {
+      const type = rm[1];
+      const target = rm[2];
+      const rest = rm[3] || '';
+      if (!_REMOTE_URL_PREFIX_RE.test(target)) continue;
+      if (!/\bTargetMode\s*=\s*"External"/i.test(rest)) continue;
+      const matchesTemplateType = _REMOTE_TEMPLATE_REL_TYPES.some(kind =>
+        type.toLowerCase().endsWith('/' + kind.toLowerCase())
+      );
+      if (!matchesTemplateType) continue;
+      hiddenFindings.push({
+        element: 'ppt rel (presentation.xml.rels)',
+        technique: 'pptx-attached-template-remote',
+        content: escapeForDisplay(target.slice(0, 200)),
+        severity: 'danger',
+        category: 'suspiciousPatterns',
+        meta: { templateUrl: escapeForDisplay(target.slice(0, 500)) },
+      });
+    }
+  }
+
+  // ---- ppt/embeddings/*.bin CFB OLE detection ----
+  const embeddingFiles = Object.keys(zip.files).filter(f => /^ppt\/embeddings\/[^/]+\.bin$/i.test(f));
+  for (const ef of embeddingFiles) {
+    const entry = zip.file(ef);
+    if (!entry) continue;
+    let buf;
+    try { buf = await entry.async('uint8array'); } catch { continue; }
+    if (buf.byteLength > _OFFICE_EMBED_MAX_BYTES) continue;
+    let hasCfbMagic = false;
+    if (buf.byteLength >= 8) {
+      hasCfbMagic = true;
+      for (let i = 0; i < 8; i++) {
+        if (buf[i] !== _CFB_MAGIC[i]) {
+          hasCfbMagic = false;
+          break;
+        }
+      }
+    }
+    if (!hasCfbMagic) continue;
+    hiddenFindings.push({
+      element: 'PPTX Embedded OLE',
+      technique: 'office-embedded-ole-cfb',
+      content: escapeForDisplay(ef.slice(0, 200)),
+      severity: 'warning',
+      category: 'suspiciousPatterns',
+      contextLocation: ef,
+      meta: { embeddingPath: ef, hasCfbMagic: true },
+    });
   }
 
   return { text: texts.join('\n'), hiddenFindings };

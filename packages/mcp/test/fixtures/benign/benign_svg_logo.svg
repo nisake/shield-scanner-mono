@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40">
+  <title>Acme Logo</title>
+  <desc>Simple two-tone wordmark logo for Acme Corp.</desc>
+  <rect x="0" y="0" width="120" height="40" fill="#0a3d62"/>
+  <text x="12" y="26" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#ffffff">ACME</text>
+  <rect x="92" y="10" width="20" height="20" fill="#f6b93b"/>
+</svg>

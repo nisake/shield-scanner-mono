@@ -44,29 +44,61 @@ const BIDI_CONTROLS = new Map([
 // number, ALL Bidi findings are escalated to "danger" (excessive-use signal).
 const BIDI_OVERUSE_THRESHOLD = 3;
 
+// v1.18.0 streaming gate: very large inputs (>5MB) are walked in 1MB chunks
+// with a 2KB overlap so we (a) keep peak memory bounded for the linear codepoint
+// scan and (b) never lose a finding whose codepoint sits exactly on a chunk
+// boundary. The overlap is generous w.r.t. the largest single codepoint we
+// detect (a 4-UTF-16-unit Plane-14 surrogate pair = 4 bytes), so a finding's
+// full span is always present in at least one chunk. Findings emitted inside
+// the overlap region of a later chunk are deduped by absolute position+char.
+const STREAM_THRESHOLD = 5 * 1024 * 1024;
+const STREAM_CHUNK_SIZE = 1024 * 1024;
+const STREAM_OVERLAP_SIZE = 2 * 1024;
+
 /**
- * Scan text for invisible Unicode characters.
- * @param {string} content - The text to scan
- * @returns {Array} Array of finding objects
+ * v1.18.0: returns true when the input is large enough that the linear
+ * codepoint walk should be split into overlapping chunks.
+ *
+ * Exposed for analyze() (detector.js) to wire `summary.streamed` /
+ * `summary.chunkCount` siblings. Pure function — no allocations.
+ *
+ * @param {string} content
+ * @returns {boolean}
  */
-export function detectInvisibleUnicode(content) {
+export function shouldStream(content) {
+  return typeof content === "string" && content.length > STREAM_THRESHOLD;
+}
+
+/**
+ * Internal: scan a single chunk and emit findings with positions offset by
+ * `chunkOffset`. Identical detection logic to the non-streaming path — the
+ * only difference is the absolute `position` writeback and the per-chunk
+ * bidi-overuse count (which is intentionally per-chunk: 3 Bidi chars in one
+ * 1MB window is still "over-use" within that locality, and a global pre-scan
+ * would defeat the bounded-memory goal).
+ *
+ * @param {string} chunk
+ * @param {number} chunkOffset - absolute offset of `chunk[0]` in the original
+ * @param {string} fullContent - the original (used for context windows only)
+ * @returns {Array} findings with absolute positions
+ */
+function scanInvisibleUnicodeChunk(chunk, chunkOffset, fullContent) {
   const findings = [];
 
-  // First pass: count Bidi-family occurrences so we can apply the over-use rule.
-  // Cheap O(n) scan; avoids needing a second pass through findings after the
-  // main loop and keeps finding objects immutable once pushed.
+  // First pass on the chunk: count Bidi-family occurrences.
   let bidiTotal = 0;
-  for (let i = 0; i < content.length; i++) {
-    const cp = content.codePointAt(i);
+  for (let i = 0; i < chunk.length; i++) {
+    const cp = chunk.codePointAt(i);
     if (cp === undefined) continue;
     if (BIDI_CONTROLS.has(cp)) bidiTotal++;
     if (cp > 0xffff) i++;
   }
   const bidiOverUse = bidiTotal >= BIDI_OVERUSE_THRESHOLD;
 
-  for (let i = 0; i < content.length; i++) {
-    const cp = content.codePointAt(i);
+  for (let i = 0; i < chunk.length; i++) {
+    const cp = chunk.codePointAt(i);
     if (cp === undefined) continue;
+    const absPos = chunkOffset + i;
 
     // Unicode Tags Block (U+E0000 - U+E007F)
     if (cp >= 0xe0000 && cp <= 0xe007f) {
@@ -78,16 +110,14 @@ export function detectInvisibleUnicode(content) {
       findings.push({
         char: `U+${cp.toString(16).toUpperCase().padStart(5, "0")}`,
         name: `Unicode Tag (ASCII: "${readable}")`,
-        position: i,
-        context: getContext(content, i),
+        position: absPos,
+        context: getContext(fullContent, absPos),
         severity: "danger",
       });
-      if (cp > 0xffff) i++; // surrogate pair
+      if (cp > 0xffff) i++;
       continue;
     }
 
-    // Bidi controls — handled BEFORE the generic INVISIBLE_CHAR_MAP check so
-    // that the category-specific severity rules win over the JSON default.
     if (BIDI_CONTROLS.has(cp)) {
       const spec = BIDI_CONTROLS.get(cp);
       const severity = bidiOverUse ? "danger" : spec.baseSeverity;
@@ -96,26 +126,23 @@ export function detectInvisibleUnicode(content) {
         name: spec.name,
         category: "bidi-control",
         kind: spec.kind,
-        position: i,
-        context: getContext(content, i),
+        position: absPos,
+        context: getContext(fullContent, absPos),
         severity,
       });
-      // Bidi chars are all BMP (<= U+2069), no surrogate-pair concern.
       continue;
     }
 
-    // Known invisible chars (non-Bidi)
     if (INVISIBLE_CHAR_MAP.has(cp)) {
       findings.push({
         char: `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`,
         name: INVISIBLE_CHAR_MAP.get(cp),
-        position: i,
-        context: getContext(content, i),
+        position: absPos,
+        context: getContext(fullContent, absPos),
         severity: "warning",
       });
     }
 
-    // Private Use Area (BMP, SPUA-A, SPUA-B)
     if (
       (cp >= 0xe000 && cp <= 0xf8ff) ||
       (cp >= 0xf0000 && cp <= 0xffffd) ||
@@ -124,16 +151,57 @@ export function detectInvisibleUnicode(content) {
       findings.push({
         char: `U+${cp.toString(16).toUpperCase()}`,
         name: "Private Use Area",
-        position: i,
-        context: getContext(content, i),
+        position: absPos,
+        context: getContext(fullContent, absPos),
         severity: "warning",
       });
     }
 
-    if (cp > 0xffff) i++; // skip surrogate pair low half
+    if (cp > 0xffff) i++;
   }
 
   return findings;
+}
+
+/**
+ * Scan text for invisible Unicode characters.
+ *
+ * v1.18.0: when `content.length > 5MB`, the scan is split into 1MB chunks
+ * with a 2KB overlap so peak memory stays bounded and we don't drop findings
+ * that straddle chunk boundaries. Overlap-region duplicates are removed by
+ * absolute (position, char) dedup. Behavior for small/medium inputs is
+ * unchanged (single linear pass).
+ *
+ * @param {string} content - The text to scan
+ * @returns {Array} Array of finding objects
+ */
+export function detectInvisibleUnicode(content) {
+  if (!shouldStream(content)) {
+    // Fast path: single pass, identical to pre-v1.18.0 behavior.
+    return scanInvisibleUnicodeChunk(content, 0, content);
+  }
+
+  // Streaming path: iterate non-overlapping advance window + overlap tail.
+  const seen = new Set(); // dedup key: `${absPos}|${char}|${name}`
+  const out = [];
+  let chunkStart = 0;
+  while (chunkStart < content.length) {
+    const chunkEnd = Math.min(
+      content.length,
+      chunkStart + STREAM_CHUNK_SIZE + STREAM_OVERLAP_SIZE,
+    );
+    const chunk = content.slice(chunkStart, chunkEnd);
+    const chunkFindings = scanInvisibleUnicodeChunk(chunk, chunkStart, content);
+    for (const f of chunkFindings) {
+      const key = `${f.position}|${f.char}|${f.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(f);
+    }
+    if (chunkEnd >= content.length) break;
+    chunkStart += STREAM_CHUNK_SIZE;
+  }
+  return out;
 }
 
 /**

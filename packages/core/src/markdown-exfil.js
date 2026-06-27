@@ -37,21 +37,62 @@
  *     - meta.entityDecoded === true is the only new meta field — added so the
  *       UI detail row can show the user that the displayed src was decoded.
  *
- * Severity (v1.9.0 — host-tier asymmetry, option D):
+ * v1.15.0 percent-decoded URL pre-pass (ALL 3 paths):
+ *   Browsers and WHATWG URL parsers treat percent-encoded reserved characters
+ *   in the path/query as literal bytes — but the URLSearchParams key tokenizer
+ *   only splits on the literal `&` / `=` chars and matches keys verbatim. An
+ *   attacker who writes `?%70rompt=PAYLOAD` (or `?a=A%26prompt=B`) hides the
+ *   strong key `prompt` from our STRONG_KEYS lookup even though the browser
+ *   fetches the URL and the server sees the obfuscated query just fine.
+ *   classifyUrl() now runs a minimal percent-decoder over the URL string when
+ *   the raw form misses, restricted to the 6 reserved chars that matter for
+ *   key tokenization (%2F /, %3F ?, %26 &, %3D =, %23 #, %20 space).
+ *     - applied at the classifyUrl() entry, so all 3 image shapes (inline,
+ *       ref, html-img) benefit uniformly. This is logically correct because
+ *       browsers do not surface percent-encoding to the URL parser layer —
+ *       it's a transport-level encoding that the URI spec mandates decoding
+ *       before query-key tokenization.
+ *     - decoder is allowlist-only (NOT decodeURIComponent): `%25` is
+ *       deliberately NOT decoded to prevent double-decode bypasses. Arbitrary
+ *       UTF-8 multi-byte sequences are NOT decoded either.
+ *     - bracket contract (R13): position+matchLen still anchors on the RAW
+ *       URL token in `content`. finding.content echoes the raw (percent-
+ *       encoded) URL verbatim.
+ *     - meta.percentDecoded === true marks the path. Composable with
+ *       entityDecoded on the html-img path (both flags can be true for the
+ *       `&quot;…%70rompt…&quot;` double-obfuscation shape).
+ *     - host-tier (R20) judgment is identical raw vs decoded: hostname is
+ *       not percent-encode target (URL parser IDNA-normalizes), and isSafeHost
+ *       / isIpLiteral / isPrivateOrLoopback short-circuits still apply on the
+ *       decoded URL's hostname (which equals the raw URL's hostname).
+ *
+ * Severity (v1.19.0 — host-tier matrix, Tier 6 'trusted-allowlist' added):
  *   - safeHost (imageOnlyHosts suffix
  *     OR userContentHosts exact)      -> short-circuit, no finding
  *   - data: / mailto: / javascript:   -> skip
  *   - non-http(s) / parse error       -> skip
+ *   - trusted-allowlist host
+ *     (TRUSTED_HOSTS suffix match —
+ *      organisation-controlled DNS):
+ *       strong >= 1                   -> warning (md-exfil-allowlist-downgraded,
+ *                                       meta.originalSeverity='danger')
+ *       weak   >= 1                   -> info    (md-exfil-allowlist-suppressed,
+ *                                       meta.suppressedByAllowlist=true —
+ *                                       NOT counted in summary danger/warning)
  *   - unknown host (incl. subdomain
  *     of userContentHost):
  *       strong >= 1                   -> danger (strong key)
- *       weak   >= 1                   -> warning (weak key)   [NEW — was weak>=2]
+ *       weak   >= 1                   -> warning (weak key)   [v1.9.0: was weak>=2]
  *   - public IP literal host:
  *       strong >= 1                   -> danger (public IP host)
  *       weak   >= 1                   -> warning (public IP host)
  *   - private/loopback IP literal:
  *       strong >= 1                   -> warning (private IP host)
  *       weak   only                   -> skip (silent on benign baseline)
+ *
+ * The TRUSTED_HOSTS list is extensible at runtime via TRUSTED_HOSTS_EXTRA env
+ * var (comma-separated, host-only). Process-env access is gated behind a try
+ * so the browser bundle continues to work with the builtin list only.
  *
  * Returned finding shape:
  *   {
@@ -148,6 +189,60 @@ function stripDecodedSurroundingQuotes(s) {
   return s;
 }
 
+// v1.15.0: minimal percent-decoder for the classifyUrl() pre-pass.
+//
+// Scope (allowlist — only the reserved chars that influence URL query-key
+// tokenization in the WHATWG URL parser):
+//   %2F / %2f -> '/'   (path separator hiding)
+//   %3F / %3f -> '?'   (query start hiding)
+//   %26       -> '&'   (query separator hiding — turns ?a=A%26prompt=B
+//                       into ?a=A&prompt=B, exposing the prompt sub-key)
+//   %3D / %3d -> '='   (key/value separator hiding)
+//   %23       -> '#'   (fragment marker)
+//   %20       -> ' '   (space — consistent with URI spec)
+//
+// EXCLUDED (intentional):
+//   - %25 ('%')              — DO NOT decode. Enables double-decode bypass
+//                              (`%2525prompt` -> `%25prompt` -> `%prompt`).
+//                              Keep single-pass and idempotent.
+//   - Arbitrary %XX           — full decodeURIComponent is too broad and would
+//                              decode UTF-8 multi-byte sequences inside query
+//                              VALUES (R12 surface risk).
+//   - %00 / control chars    — skip; don't help key matching and may break
+//                              `new URL()` downstream.
+//
+// Regex matches ONLY the allowlisted bytes, so unknown %-sequences are not
+// even touched. PERCENT_MAP `?? m` is belt-and-suspenders.
+//
+// R12 (raw token contract): minimalPercentDecode's output is ONLY consumed by
+// classifyUrlImpl for re-classification — it never reaches finding.content,
+// finding.matchLen, finding.position, or priority.js#labelFor. Mirrors the
+// v1.13.0 entity-decode pattern.
+//
+// Cost: caller short-circuits if `%` is absent in the raw URL, so this
+// function is O(n) only on URLs that actually contain `%`.
+const PERCENT_MAP = {
+  "%2F": "/", "%2f": "/",
+  "%3F": "?", "%3f": "?",
+  "%26": "&",
+  "%3D": "=", "%3d": "=",
+  "%23": "#",
+  "%20": " ",
+};
+// Tight allowlist regex — ONLY the 6 reserved chars relevant to query-key
+// tokenization. Unknown %-sequences are not matched (and therefore not
+// touched). The PERCENT_MAP `?? m` fallback is belt-and-suspenders.
+//   %2[0Ff] -> %20 / %2F / %2f
+//   %26     -> %26
+//   %3[DdFf]-> %3D / %3d / %3F / %3f
+//   %23     -> %23
+const RE_PCT_ALLOWLIST = /%(?:2[0Ff]|26|3[DdFf]|23)/g;
+
+function minimalPercentDecode(s) {
+  if (!s.includes("%")) return s;
+  return s.replace(RE_PCT_ALLOWLIST, (m) => PERCENT_MAP[m] ?? m);
+}
+
 function isSafeHost(hostname) {
   if (!hostname) return false;
   const h = hostname.toLowerCase();
@@ -160,6 +255,166 @@ function isSafeHost(hostname) {
   // Tier 3 (back-compat): legacy `safeHosts` entries are exact-only too.
   if (LEGACY_SAFE_HOSTS.has(h)) return true;
   return false;
+}
+
+// v1.19.0 Tier 6 — trusted-allowlist.
+//
+// Curated list of well-known operational hosts (analytics, CDN-as-a-service,
+// payment / auth / SaaS APIs, package registries, official cloud storage
+// public buckets, etc.). These hosts ARE NOT image hosts in the strict sense
+// (so they don't qualify for the imageOnlyHosts tier-1 short-circuit), but
+// they DO accept inbound traffic from any LLM-rendered document in the wild
+// and the FP-pressure on weak-key heuristics is large enough to warrant a
+// dedicated suppress/downgrade tier.
+//
+// Suffix-matching semantics (like tier-1 imageOnlyHosts): any subdomain of a
+// listed host counts. This is safe because every entry below is operated by
+// the listed organisation — subdomain takeover would require compromising
+// the organisation's DNS itself.
+//
+// EXACTLY-matched entries (no subdomain) are also covered by the same
+// `h === t || h.endsWith("." + t)` check.
+//
+// Severity contract (see classifyHostTier + classifyUrlImpl downstream):
+//   - weak-key-only on trusted-allowlist  -> suppress (severity 'info',
+//                                            does not count toward
+//                                            danger/warning summary)
+//   - strong-key on trusted-allowlist     -> downgrade ONE step
+//                                            (danger -> warning)
+//   - IP literal still wins (we never reach the trusted-allowlist branch
+//     for IP literals because isIpLiteral short-circuits earlier).
+//
+// Extensible at runtime via TRUSTED_HOSTS_EXTRA env var (comma-separated,
+// host-only — no scheme, no path). Process-env access is gated through a
+// `try` so this still works in environments where `process` is undefined
+// (browser bundle).
+// IMPORTANT subdomain-takeover policy (mirrors the userContentHosts comment
+// in exfil-patterns.json): bare 2LDs where ANY visitor can create a bucket
+// / app / page on a *.example.com subdomain MUST NOT be on this list. That
+// includes googleusercontent.com / *.storage.googleapis.com / *.amazonaws.com
+// / *.appspot.com / *.cloudfront.net / *.vercel.app / *.netlify.app /
+// *.azureedge.net / *.blob.core.windows.net / *.fastly.net / *.b-cdn.net.
+// Suffix-matching is INTENDED on this list (subdomain == still the listed
+// organisation's DNS), so anything that lets a third party stand up an
+// attacker subdomain breaks the safety contract — see safehost-subdomain-
+// bypass.test.js which explicitly asserts these stay at 'danger'.
+const TRUSTED_HOSTS_BUILTIN = [
+  // Analytics / marketing pixels (organisation-controlled DNS)
+  "google-analytics.com",
+  "googletagmanager.com",
+  "analytics.google.com",
+  "stats.g.doubleclick.net",
+  "doubleclick.net",
+  "mixpanel.com",
+  "segment.io",
+  "segment.com",
+  "amplitude.com",
+  "hotjar.com",
+  "hubspot.com",
+  "klaviyo.com",
+  "marketo.com",
+  "bing.com",
+  "fbcdn.net",
+  // Payment / auth / SaaS APIs
+  "stripe.com",
+  "auth0.com",
+  "okta.com",
+  "twilio.com",
+  "sendgrid.net",
+  "mailgun.org",
+  "postmarkapp.com",
+  "intercom.com",
+  "intercomcdn.com",
+  "zendesk.com",
+  "salesforce.com",
+  "atlassian.com",
+  // jsdelivr.net / unpkg.com are operated by the project itself (no subdomain
+  // takeover possible). The .net / .com TLD entries here are organisation-
+  // operated and don't carry per-customer subdomain stand-up.
+  "jsdelivr.net",
+  "unpkg.com",
+  "cdnjs.cloudflare.com",
+  "imagekit.io",
+  "imgix.net",
+  "cloudinary.com",
+  // GitHub static-asset CDN (NOT githubusercontent.com — that's user content)
+  "githubassets.com",
+  // Package registries
+  "npmjs.com",
+  "pypi.org",
+  "rubygems.org",
+  "crates.io",
+  "packagist.org",
+  // Avatar / gravatar (org-operated)
+  "gravatar.com",
+  // Microsoft / Office (org-operated; *.live.com is sign-in family, not
+  // arbitrary user-controlled subdomains. blob.core.windows.net /
+  // azureedge.net are deliberately EXCLUDED — those are customer-bucket
+  // namespaces.)
+  "office.com",
+  "office.net",
+  "outlook.com",
+  // Vimeo (vimeocdn.com is org-operated; vimeo.com is the main marketing
+  // domain. NOT including video-host subdomains because those are
+  // user-uploaded content.)
+  "vimeocdn.com",
+];
+
+function parseTrustedHostsExtra() {
+  try {
+    if (typeof process !== "undefined" && process && process.env) {
+      const raw = process.env.TRUSTED_HOSTS_EXTRA;
+      if (typeof raw === "string" && raw.length > 0) {
+        return raw
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter((s) => s.length > 0 && /^[a-z0-9.\-]+$/.test(s));
+      }
+    }
+  } catch {
+    // Browser bundle or sandboxed env — silently fall back to builtin only.
+  }
+  return [];
+}
+
+const TRUSTED_HOSTS = TRUSTED_HOSTS_BUILTIN.map((s) => s.toLowerCase()).concat(
+  parseTrustedHostsExtra()
+);
+
+function isTrustedAllowlistHost(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  for (const t of TRUSTED_HOSTS) {
+    if (h === t || h.endsWith("." + t)) return true;
+  }
+  return false;
+}
+
+/**
+ * Classify the host into one of the six tiers (v1.19.0). Exposed for tests
+ * and for future detectors that may want the same tiering signal.
+ *
+ * Tier order (FIRST match wins — caller treats them as a disjoint partition):
+ *   1. 'image-only'        — imageOnlyHosts suffix / userContentHosts exact
+ *                            (collapsed: caller never branches between them)
+ *                            [short-circuit SAFE]
+ *   2. 'ip-literal-private'— RFC1918 / loopback / link-local
+ *   3. 'ip-literal-public' — any other IPv4/IPv6 literal
+ *   4. 'trusted-allowlist' — TRUSTED_HOSTS suffix match     [suppress/downgrade]
+ *   5. 'unknown'           — everything else                [normal severity]
+ *
+ * R12: the returned string is a fixed enum value, not an attacker-controlled
+ * host or key, so it's safe to surface via `meta.hostTier`.
+ */
+export function classifyHostTier(hostname) {
+  if (!hostname) return "unknown";
+  if (isSafeHost(hostname)) return "image-only";
+  if (isIpLiteral(hostname)) {
+    if (isPrivateOrLoopback(hostname)) return "ip-literal-private";
+    return "ip-literal-public";
+  }
+  if (isTrustedAllowlistHost(hostname)) return "trusted-allowlist";
+  return "unknown";
 }
 
 // IPv4 dotted quad
@@ -252,9 +507,10 @@ function classifyQueryKeys(urlObj) {
 }
 
 /**
- * Classify a single URL string.
- * Returns { severity, technique, meta } or null if it should not produce a
- * finding.
+ * Internal URL classifier (v1.15.0 refactor).
+ *
+ * Pure function: takes a URL string (raw OR percent-decoded form), returns
+ * { severity, technique, meta } or null. No side effects, no I/O.
  *
  * R12: `technique` is a FIXED detector-controlled phrase — no attacker-
  * controlled host or query-key name is interpolated into it (those would
@@ -262,8 +518,10 @@ function classifyQueryKeys(urlObj) {
  * is split into `meta: { host, ipKind, matchedKey }` so UIs can still
  * display the specifics on the detail row without exposing them in the
  * summary banner.
+ *
+ * Called by classifyUrl() which adds the percent-decode 2-pass shell.
  */
-function classifyUrl(rawUrl) {
+function classifyUrlImpl(rawUrl) {
   // Skip non-http(s) schemes early.
   const lower = rawUrl.trimStart().toLowerCase();
   if (
@@ -296,6 +554,62 @@ function classifyUrl(rawUrl) {
   if (isSafeHost(cleanHost)) return null;
 
   const { strong, weak, sampleStrong, sampleWeak } = classifyQueryKeys(urlObj);
+
+  // v1.19.0 Tier 6 — trusted-allowlist. Evaluated BEFORE IP-literal logic so
+  // an IP literal (which is never on the trusted-allowlist) still flows to
+  // the public/private branch unchanged. Trusted-allowlist hosts are
+  // suffix-matched (subdomains of organisation-controlled DNS).
+  //
+  // Behaviour:
+  //   - weak >= 1 && strong === 0  -> info-severity audit log
+  //                                   ('md-exfil-allowlist-suppressed').
+  //                                   Severity 'info' is NOT counted by
+  //                                   detector.js#countBySeverity (only
+  //                                   'danger'/'warning' are), so the
+  //                                   warning bucket stays quiet.
+  //   - strong >= 1                -> downgrade severity ONE step
+  //                                   ('md-exfil-allowlist-downgraded',
+  //                                   meta.originalSeverity='danger').
+  //                                   Surfaces as 'warning' instead of
+  //                                   'danger'. UI still sees a finding;
+  //                                   the banner deserves the demotion
+  //                                   because the host is operationally
+  //                                   trusted.
+  //   - no strong / no weak        -> null (silent).
+  //
+  // R12: technique stays a FIXED detector-controlled kebab id. host /
+  // matchedKey live on meta only.
+  if (isTrustedAllowlistHost(cleanHost)) {
+    if (strong >= 1) {
+      return {
+        severity: "warning",
+        technique: "md-exfil-allowlist-downgraded",
+        meta: {
+          host: cleanHost,
+          hostTier: "trusted-allowlist",
+          matchedKey: sampleStrong,
+          strongHits: strong,
+          weakHits: weak,
+          originalSeverity: "danger",
+          allowlistDowngraded: true,
+        },
+      };
+    }
+    if (weak >= 1) {
+      return {
+        severity: "info",
+        technique: "md-exfil-allowlist-suppressed",
+        meta: {
+          host: cleanHost,
+          hostTier: "trusted-allowlist",
+          matchedKey: sampleWeak,
+          weakHits: weak,
+          suppressedByAllowlist: true,
+        },
+      };
+    }
+    return null;
+  }
 
   // IP literal logic.
   if (isIpLiteral(cleanHost)) {
@@ -357,6 +671,56 @@ function classifyUrl(rawUrl) {
     };
   }
   return null;
+}
+
+/**
+ * Classify a URL via the v1.15.0 percent-decode 2-pass pre-shell.
+ *
+ *   1. Try classifyUrlImpl(rawUrl) — fast path. Hit returns the verdict as-is
+ *      (meta.percentDecoded is intentionally absent).
+ *   2. On miss, if rawUrl has no `%` char, return null (zero-cost skip for
+ *      the benign-URL common case).
+ *   3. Otherwise minimalPercentDecode(rawUrl) -> decoded. If decoded equals
+ *      rawUrl (allowlist found no targets), return null.
+ *   4. Try classifyUrlImpl(decoded). On hit, merge {percentDecoded: true}
+ *      into the verdict's meta and return.
+ *
+ * Composability:
+ *   - All 3 image shapes (inline, ref, html-img) call this same wrapper, so
+ *     the percent-decode pass applies uniformly.
+ *   - The html-img path additionally wraps THIS function with its own
+ *     entity-decode 2-pass (raw -> entity-decoded). Both 2-passes compose:
+ *     a `<img src=&quot;…%70rompt…&quot;>` shape hits the entity-decoded
+ *     percent-decoded form and yields meta { entityDecoded: true,
+ *     percentDecoded: true }.
+ *
+ * R12: minimalPercentDecode's output never reaches finding.content or
+ * finding.technique — it only feeds classifyUrlImpl's `new URL()` parser.
+ * Bracket contract: position+matchLen still anchors on the raw URL token
+ * upstream in detectMarkdownExfil(), and buildFinding(rawUrl, ...) writes
+ * the raw URL to finding.content.
+ */
+function classifyUrl(rawUrl) {
+  // 1. Fast path — raw URL classification.
+  const rawVerdict = classifyUrlImpl(rawUrl);
+  if (rawVerdict) return rawVerdict;
+
+  // 2. Zero-cost skip on the common case (no percent-encoding).
+  if (!rawUrl.includes("%")) return null;
+
+  // 3. Decode the allowlisted reserved chars; bail if no-op.
+  const decoded = minimalPercentDecode(rawUrl);
+  if (decoded === rawUrl) return null;
+
+  // 4. Re-classify on the decoded form; mark the path on hit.
+  const decodedVerdict = classifyUrlImpl(decoded);
+  if (!decodedVerdict) return null;
+
+  // R12: only a boolean flag — never the decoded URL string.
+  return {
+    ...decodedVerdict,
+    meta: { ...(decodedVerdict.meta || {}), percentDecoded: true },
+  };
 }
 
 function buildFinding(element, urlStr, position, severity, technique, meta) {

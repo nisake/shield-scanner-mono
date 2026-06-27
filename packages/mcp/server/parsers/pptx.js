@@ -37,6 +37,26 @@ const OFFICE_IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "tiff", 
 const OFFICE_MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 const OFFICE_MEDIA_MAX_COUNT = 50;
 
+// v1.18.0 Follina: Office Compound File Binary (CFB) magic. Shared with
+// docx.js / xlsx.js — duplicated locally to avoid cross-parser coupling.
+const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+// v1.18.0 Follina: Remote-URL prefix allow-list, mirrors docx.js.
+const REMOTE_URL_PREFIX_RE = /^(?:https?:|file:|\\\\)/i;
+
+// v1.18.0 Follina: relationship types whose Target+TargetMode=External
+// represent a remote template-style fetch on presentation open. Notes
+// masters and slide-masters with external targets are the PPTX equivalent
+// of word/attachedTemplate.
+const REMOTE_TEMPLATE_REL_TYPES = [
+  "slideMaster",
+  "notesMaster",
+  "handoutMaster",
+  "theme",
+  "presProps",
+  "attachedTemplate",
+];
+
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
@@ -336,13 +356,25 @@ export async function parsePptxBuffer(buffer) {
     } catch {
       continue;
     }
-    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+    if (buf.length === 0) {
       extraFindings.push({
         element: "PPTX Embedded Image",
-        technique: `Oversize embedded image skipped (> ${OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: "empty-embedded-image",
         content: escapeForDisplay(mediaName.slice(0, 200)),
         severity: "warning",
         contextLocation: `PPTX media:${mediaName}`,
+      });
+      mediaProcessed++;
+      continue;
+    }
+    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+      extraFindings.push({
+        element: "PPTX Embedded Image",
+        technique: "oversize-embedded-image",
+        content: escapeForDisplay(mediaName.slice(0, 200)),
+        severity: "warning",
+        contextLocation: `PPTX media:${mediaName}`,
+        meta: { maxBytes: OFFICE_MEDIA_MAX_BYTES },
       });
       mediaProcessed++;
       continue;
@@ -372,6 +404,78 @@ export async function parsePptxBuffer(buffer) {
         });
       }
     }
+  }
+
+  // --- v1.18.0 Follina: ppt/_rels/presentation.xml.rels external template ---
+  // The PPTX equivalent of word/attachedTemplate is an OPC relationship from
+  // ppt/presentation.xml whose Target+TargetMode=External points at a remote
+  // .potx / .thmx / .xml that the viewer fetches on open. We surface every
+  // such relationship whose Type matches a known template-style category and
+  // whose Target uses a remote scheme (http(s)/file/UNC).
+  const presRelsEntry = zip.file("ppt/_rels/presentation.xml.rels");
+  if (presRelsEntry) {
+    const relsXml = await presRelsEntry.async("string");
+    const relRe =
+      /<Relationship\b[^>]*\bType\s*=\s*"([^"]+)"[^>]*\bTarget\s*=\s*"([^"]+)"([^>]*)>/gi;
+    let rm;
+    while ((rm = relRe.exec(relsXml)) !== null) {
+      const type = rm[1];
+      const target = rm[2];
+      const rest = rm[3] || "";
+      if (!REMOTE_URL_PREFIX_RE.test(target)) continue;
+      // require TargetMode="External" so internal relative targets do not FP.
+      if (!/\bTargetMode\s*=\s*"External"/i.test(rest)) continue;
+      const matchesTemplateType = REMOTE_TEMPLATE_REL_TYPES.some((kind) =>
+        type.toLowerCase().endsWith("/" + kind.toLowerCase()),
+      );
+      if (!matchesTemplateType) continue;
+      // v1.18.0 Follina: kebab ID + meta-only URL (R12 invariant).
+      extraFindings.push({
+        element: "ppt rel (presentation.xml.rels)",
+        technique: "pptx-attached-template-remote",
+        content: escapeForDisplay(target.slice(0, 200)),
+        severity: "danger",
+        category: "suspiciousPatterns",
+        meta: { templateUrl: escapeForDisplay(target.slice(0, 500)) },
+      });
+    }
+  }
+
+  // --- v1.18.0 Follina: ppt/embeddings/*.bin CFB OLE detection ---
+  // Shared kebab id 'office-embedded-ole-cfb' with DOCX/XLSX surface.
+  const embeddingFiles = Object.keys(zip.files).filter((f) =>
+    /^ppt\/embeddings\/[^/]+\.bin$/i.test(f),
+  );
+  for (const ef of embeddingFiles) {
+    const entry = zip.file(ef);
+    if (!entry) continue;
+    let buf;
+    try {
+      buf = await entry.async("nodebuffer");
+    } catch {
+      continue;
+    }
+    if (buf.length > OFFICE_MEDIA_MAX_BYTES) continue;
+    let hasCfbMagic = false;
+    if (buf.length >= 8) {
+      hasCfbMagic = true;
+      for (let i = 0; i < 8; i++) {
+        if (buf[i] !== CFB_MAGIC[i]) {
+          hasCfbMagic = false;
+          break;
+        }
+      }
+    }
+    if (!hasCfbMagic) continue;
+    extraFindings.push({
+      element: "PPTX Embedded OLE",
+      technique: "office-embedded-ole-cfb",
+      content: escapeForDisplay(ef.slice(0, 200)),
+      severity: "warning",
+      category: "suspiciousPatterns",
+      contextLocation: ef,
+      meta: { embeddingPath: ef, hasCfbMagic: true },
+    });
   }
 
   return {

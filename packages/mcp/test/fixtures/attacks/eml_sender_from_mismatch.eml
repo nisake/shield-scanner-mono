@@ -1,0 +1,8 @@
+From: ceo@target-corp.example
+Sender: bot@bulk-mailer.example
+To: finance@target-corp.example
+Subject: Wire request
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Please process the wire.

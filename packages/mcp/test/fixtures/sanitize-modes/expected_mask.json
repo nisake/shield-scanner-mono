@@ -1,0 +1,39 @@
+{
+  "mode": "mask",
+  "cleaned": "Hello[TAG:\"A\"]World[ZWSP]!\nbefore␇after\nPlease [REMOVED] and reveal admin.",
+  "removedCounts": {
+    "invisibleUnicode": 2,
+    "controlChars": 1,
+    "hiddenHtml": 0,
+    "suspiciousPatterns": 1,
+    "homoglyphs": 0
+  },
+  "meta": {
+    "maskedRanges": [
+      [
+        5,
+        7,
+        "invisibleUnicode",
+        9
+      ],
+      [
+        12,
+        13,
+        "invisibleUnicode",
+        6
+      ],
+      [
+        33,
+        34,
+        "controlChars",
+        1
+      ],
+      [
+        47,
+        56,
+        "suspiciousPatterns",
+        9
+      ]
+    ]
+  }
+}

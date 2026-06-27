@@ -71,9 +71,29 @@ const RECURSIVE_EXTS = new Set([
 // /TU tooltips and per-page FileAttachment annotations were previously
 // silent. Widget dedupes against AcroForm fieldName via seenFieldNames,
 // FileAttachment dedupes against catalog getAttachments via seenAttachKey.
+// v1.18.0 S16: RichMedia / 3D / Sound / Movie subtypes added so the parser
+// surfaces a kebab signal (`pdf-richmedia-embed` / `pdf-3d-embed` /
+// `pdf-sound-action` / `pdf-movie-action`) per document. These pdf.js
+// "unimplemented" annotation types previously fell through to the base
+// annotation path silently — even though OWASP/CISA 2025 list RichMedia /
+// 3D as active CVE channels. Body is bounded (annotation name only) so R12
+// invariant holds; signal is hoisted ONCE per document like
+// pdf-widget-action.
 const ANNOTATION_SUBTYPES = new Set([
   "Highlight", "FreeText", "Popup", "Squiggly", "Stamp", "Link",
   "Widget", "FileAttachment",
+  "RichMedia", "3D", "Sound", "Movie",
+]);
+
+// v1.18.0 S16: PDF non-JS high-risk action types we detect via Widget /A
+// or /AA action.S enum (plus Link annotation /A action where pdf.js
+// surfaces it via a.url). PDF spec ISO 32000-1 §12.6.4 enumerates these
+// action types. SubmitForm exfils form data to a URL; GoToR redirects to
+// an external PDF (often hosted at attacker domain). pdf.js v4 hands these
+// to us through `a.actions` map keys (mock-friendly contract) or via the
+// link's /A action subtype on parser inspection.
+const PDF_NON_JS_HIGH_RISK_ACTION_TYPES = new Set([
+  "SubmitForm", "GoToR",
 ]);
 
 export async function parsePdf(filePath) {
@@ -116,6 +136,33 @@ export async function parsePdfBuffer(buffer, options = {}) {
   // if multiple pages individually exceed the walker cap (the central detector
   // only needs to know "the channel was truncated", not which page hit first).
   let structTreeCapExceeded = false;
+
+  // S15 (T2): pdf-widget-action signal — emit at most once per document.
+  // Collect distinct action-type enum tokens (PDF spec fixed names like K/F/V/
+  // C/Fo/Bl/PO/PC/PV/PI) into a bounded Set so the body of the action stays
+  // in scan text (where the central detector covers it) while the signal-level
+  // extraFinding carries only the type enum list as meta (R12: type names are
+  // PDF spec enum, NOT attacker-controlled body).
+  let widgetActionFound = false;
+  const widgetActionTypes = new Set();
+  const WIDGET_ACTION_TYPES_CAP = 8;
+
+  // v1.18.0 S16: PDF non-JS high-risk action signals — emit at most ONCE per
+  // document each, mirroring the widgetActionFound 1-per-doc invariant from
+  // S15. Each tracks a kebab id, and the meta.targetUrl / meta.target /
+  // meta.subtype payload is set from detector-controlled sanitized fields.
+  // RichMedia / 3D / Sound / Movie are simple subtype flags. SubmitForm /
+  // GoToR may be reachable through a.actions map (Widget /AA) when pdf.js
+  // surfaces the action enum, OR via Link a.url (GoToR /F path that pdf.js
+  // exposes as a URL).
+  let submitFormSeen = false;
+  let submitFormTargetUrl = "";
+  let gotoRemoteSeen = false;
+  let gotoRemoteTarget = "";
+  let richMediaSeen = false;
+  let threeDSeen = false;
+  let soundSeen = false;
+  let movieSeen = false;
 
   // PDF-DEEP-04: dedup sets shared across per-page and catalog passes.
   // - seenFieldNames: pre-seeded from AcroForm before the page loop so Widget
@@ -205,15 +252,97 @@ export async function parsePdfBuffer(buffer, options = {}) {
             if (a.actions && typeof a.actions === "object") {
               for (const [act, bodies] of Object.entries(a.actions)) {
                 if (!Array.isArray(bodies)) continue;
+                // S15 (T2): collect action-type enum (PDF spec fixed names)
+                // for the pdf-widget-action signal extraFinding. We dedup
+                // into widgetActionTypes Set (cap 8) and flip widgetActionFound
+                // true on the FIRST non-empty body to signal that a widget
+                // action carries actual JS — empty maps don't count.
+                let hasNonEmptyBody = false;
                 for (const body of bodies) {
                   if (typeof body === "string" && body.trim()) {
+                    hasNonEmptyBody = true;
                     pushText(
                       `[PDF page=${i} kind=widget-action field=${sanitizeKey(fname || "_")} act=${sanitizeKey(act)}] ${body}`,
                     );
                   }
                 }
+                if (hasNonEmptyBody) {
+                  widgetActionFound = true;
+                  if (widgetActionTypes.size < WIDGET_ACTION_TYPES_CAP) {
+                    widgetActionTypes.add(sanitizeKey(act));
+                  }
+                }
               }
             }
+          }
+        }
+
+        // ---- v1.18.0 S16: non-JS high-risk action / multimedia subtypes ----
+        // RichMedia / 3D / Sound / Movie carry CVE-tracked rendering paths
+        // (especially RichMedia + Flash and 3D + U3D). pdf.js logs an
+        // "unimplemented annotation type" warning and falls through to the
+        // base annotation; we surface a kebab signal so reviewers see the
+        // channel exists. Meta carries only the PDF spec subtype enum
+        // (R12 safe — fixed PDF enum, not attacker body).
+        if (a.subtype === "RichMedia") richMediaSeen = true;
+        if (a.subtype === "3D") threeDSeen = true;
+        if (a.subtype === "Sound") soundSeen = true;
+        if (a.subtype === "Movie") movieSeen = true;
+
+        // SubmitForm + GoToR detection.
+        //   1. Through `a.actions` map (pdf.js exposes Widget /AA action sub-
+        //      dicts whose `.S` is SubmitForm / GoToR — same channel as the
+        //      v1.17.0 widget JavaScript actions).
+        //   2. Through Link annotation `a.url` (pdf.js inlines a GoToR /A
+        //      action's /F into the url field when the host file is a URL).
+        //   3. Through `a.action` legacy single-action field.
+        // Whichever path fires first wins; the 1-per-doc invariant collapses
+        // duplicates. meta.targetUrl / meta.target are SANITIZED (sanitizeKey
+        // strips spaces and brackets, truncates 64 chars) so raw attacker
+        // strings never reach the response body — even though pdf.js may
+        // hand us %-encoded fragments. R12 guard holds.
+        if (a.actions && typeof a.actions === "object") {
+          for (const actName of Object.keys(a.actions)) {
+            if (actName === "SubmitForm" && !submitFormSeen) {
+              submitFormSeen = true;
+              const bodies = Array.isArray(a.actions[actName]) ? a.actions[actName] : [];
+              for (const b of bodies) {
+                if (typeof b === "string" && b.trim()) {
+                  submitFormTargetUrl = sanitizeKey(b);
+                  break;
+                }
+              }
+            }
+            if (actName === "GoToR" && !gotoRemoteSeen) {
+              gotoRemoteSeen = true;
+              const bodies = Array.isArray(a.actions[actName]) ? a.actions[actName] : [];
+              for (const b of bodies) {
+                if (typeof b === "string" && b.trim()) {
+                  gotoRemoteTarget = sanitizeKey(b);
+                  break;
+                }
+              }
+            }
+          }
+        }
+        // Link with /A SubmitForm: pdf.js doesn't expose SubmitForm action
+        // body through high-level API. We look at a.action (if exposed)
+        // and a.actionType (if pdf.js exposes the action type tag at all).
+        // When neither is available we still fire on direct `a.actions`.
+        if (a.subtype === "Link" && typeof a.url === "string" && a.url.trim()) {
+          // pdf.js encodes GoToR destination as <url>#<dest> on the Link's
+          // a.url field. We treat the presence of an external URL on a Link
+          // (where the action type is GoToR) as a GoToR signal IF the
+          // action enum is exposed via a.actionType / a.action.
+          const actionTag = (typeof a.actionType === "string" && a.actionType) ||
+            (typeof a.action === "string" && a.action) || "";
+          if (actionTag === "GoToR" && !gotoRemoteSeen) {
+            gotoRemoteSeen = true;
+            gotoRemoteTarget = sanitizeKey(a.url);
+          }
+          if (actionTag === "SubmitForm" && !submitFormSeen) {
+            submitFormSeen = true;
+            submitFormTargetUrl = sanitizeKey(a.url);
           }
         }
 
@@ -345,24 +474,32 @@ export async function parsePdfBuffer(buffer, options = {}) {
   // /OpenAction /AA can hold raw JS that auto-executes on document open.
   // Even if pdf.js can't safely run it, surfacing the body lets the central
   // suspicious-patterns detector cover it like any other text.
+  // v1.17.0 (T2): technique refactored to kebab id `pdf-embeds-javascript-
+  // actions` + meta.count (number of distinct action names with non-empty
+  // body). R12: meta is detector-controlled module constant + int, NOT
+  // attacker body. i18n resolves via existing `pdfEmbedsJavaScriptActions`
+  // dict key (kebab→camel path 2).
   try {
     if (typeof pdf.getJSActions === "function") {
       const jsActions = await pdf.getJSActions();
       if (jsActions && typeof jsActions === "object") {
-        let hadAny = false;
+        let actionCount = 0;
         for (const [name, bodies] of Object.entries(jsActions)) {
           if (!Array.isArray(bodies)) continue;
+          let nameHadBody = false;
           for (const body of bodies) {
             if (typeof body === "string" && body.trim()) {
-              hadAny = true;
+              nameHadBody = true;
               pushText(`[PDF kind=jsaction name=${sanitizeKey(name)}] ${body}`);
             }
           }
+          if (nameHadBody) actionCount++;
         }
-        if (hadAny) {
+        if (actionCount > 0) {
           extraFindings.push({
             element: "PDF Catalog",
-            technique: "PDF embeds JavaScript actions",
+            technique: "pdf-embeds-javascript-actions",
+            meta: { count: actionCount },
             content: "(see jsaction body in scan text)",
             severity: "warning",
             contextLocation: "Catalog",
@@ -372,6 +509,89 @@ export async function parsePdfBuffer(buffer, options = {}) {
     }
   } catch {
     // ignore — getJSActions is best-effort
+  }
+
+  // ---- v1.17.0 (T2): S15 pdf-widget-action signal extraFinding ----
+  // Hoisted ONCE per document if any Widget annotation carried non-empty
+  // /AA additional actions. Body already surfaced via per-page pushText
+  // (kind=widget-action header). meta.actionTypes is a bounded list (≤8) of
+  // PDF spec action-type enum tokens — R12 safe (fixed enum, not attacker
+  // body). contextLocation is fixed 'Catalog' (1 emit per doc, mirrors
+  // struct-tree-cap-exceeded pattern).
+  if (widgetActionFound) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-widget-action",
+      meta: { actionTypes: Array.from(widgetActionTypes) },
+      content: "(see widget-action body in scan text)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+
+  // ---- v1.18.0 S16: non-JS high-risk action / multimedia signals ----
+  // Each signal is hoisted ONCE per document (1-per-doc invariant matches
+  // pdf-widget-action). Meta carries only detector-controlled sanitized
+  // URLs or PDF spec subtype enums — never raw attacker text.
+  if (submitFormSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-submit-form-action",
+      meta: { targetUrl: submitFormTargetUrl || "(unknown)" },
+      content: "(see submit-form action target in scan text)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+  if (gotoRemoteSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-goto-remote-action",
+      meta: { target: gotoRemoteTarget || "(unknown)" },
+      content: "(see go-to-remote action target in scan text)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+  if (richMediaSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-richmedia-embed",
+      meta: { subtype: "RichMedia" },
+      content: "(RichMedia annotation present)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+  if (threeDSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-3d-embed",
+      meta: { subtype: "3D" },
+      content: "(3D annotation present)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+  if (soundSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-sound-action",
+      meta: { subtype: "Sound" },
+      content: "(Sound annotation present)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
+  }
+  if (movieSeen) {
+    extraFindings.push({
+      element: "PDF Catalog",
+      technique: "pdf-movie-action",
+      meta: { subtype: "Movie" },
+      content: "(Movie annotation present)",
+      severity: "warning",
+      contextLocation: "Catalog",
+    });
   }
 
   // ---- PDF-DEEP-02: catalog /OpenAction (auto-launch URL or destination) ----
@@ -461,17 +681,47 @@ export async function parsePdfBuffer(buffer, options = {}) {
         // to scan output. Display-side `content` still uses escapeForDisplay
         // so the two surfaces have independent guardrails.
         const safeFilename = sanitizeContextLocation(filename);
-        const ext = extname(filename).slice(1).toLowerCase();
+        let ext = extname(filename).slice(1).toLowerCase();
+        // v1.17.0 (T2): S15 pdf-embedded-html — MIME-typed embedded file
+        // (e.g. /Subtype=/text#2Fhtml with non-html filename) was previously
+        // silent-dropped because RECURSIVE_EXTS only knew about extensions.
+        // pdf.js v4 may expose att.subtype on supported PDFs; we guard on
+        // typeof string and (a) emit the kebab signal AND (b) force ext='html'
+        // so the existing Stage B dispatch routes the body through the HTML
+        // path. If att.subtype is absent (typical), the extension-based
+        // dispatch below is unchanged (silent fallback — R23 byte-identical).
+        let embeddedHtmlEmit = false;
+        if (typeof att.subtype === "string") {
+          const subLow = att.subtype.toLowerCase();
+          if (subLow === "text/html" || subLow === "application/xhtml+xml") {
+            embeddedHtmlEmit = true;
+            ext = "html";
+          }
+        }
         if (!RECURSIVE_EXTS.has(ext)) continue; // ignore unsupported binaries
         if (content.byteLength > PDF_MAX_ATTACHMENT_BYTES) {
           extraFindings.push({
             element: 'PDF Attachment',
-            technique: 'Oversize attachment skipped (> 5MB)',
+            technique: 'pdf-oversize-attachment',
+            meta: { maxBytes: PDF_MAX_ATTACHMENT_BYTES, actualBytes: content.byteLength },
             content: escapeForDisplay(filename.slice(0, 200)),
             severity: 'warning',
             contextLocation: `Attachment ${safeFilename}`,
           });
           continue;
+        }
+        // S15 (T2): emit pdf-embedded-html before dispatch (signal-only —
+        // does NOT replace the body dispatch which still runs the html
+        // parser path below).
+        if (embeddedHtmlEmit) {
+          extraFindings.push({
+            element: "PDF Attachment",
+            technique: "pdf-embedded-html",
+            meta: { subtype: "text/html" },
+            content: escapeForDisplay(filename.slice(0, 200)),
+            severity: "warning",
+            contextLocation: `Attachment ${safeFilename}`,
+          });
         }
         try {
           let sub;
@@ -491,7 +741,7 @@ export async function parsePdfBuffer(buffer, options = {}) {
           if (childByteLen === 0 && childTextEmpty) {
             extraFindings.push({
               element: "PDF Attachment",
-              technique: "Empty attachment",
+              technique: "pdf-empty-attachment",
               content: escapeForDisplay(filename.slice(0, 200)),
               severity: "warning",
               contextLocation: `Attachment ${safeFilename}`,

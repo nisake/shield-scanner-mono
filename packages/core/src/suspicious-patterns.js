@@ -18,11 +18,24 @@ import { mapSpanToOriginal } from "./shadow-copy.js";
 // that have no severity field. Warning-tier patterns let us add lower-
 // confidence signals (e.g. generic 'Human:' turn markers) without inflating
 // the danger count for legitimate transcripts / docs.
+//
+// v1.18.0 pre-compile contract: every RegExp instance we ever need at runtime
+// lives on the module-scope arrays below. Per-call paths (detect*, strip*)
+// MUST NOT allocate `new RegExp()` — the regex objects are reused across calls
+// (with `lastIndex = 0` resets for the global-stateful detect paths). This
+// eliminates the per-analyze() compile cost that previously scaled with the
+// pattern count (currently 100+ rules).
 const { patterns: PATTERN_DEFS } = loadRule("suspicious-patterns.json");
 const COMPILED_PATTERNS = PATTERN_DEFS.map((p) => ({
   name: p.name,
   regex: new RegExp(p.pattern, p.flags || "g"),
   severity: p.severity === "warning" ? "warning" : "danger",
+}));
+// Separate strip-only regex instances so stripSuspiciousPatterns can run
+// alongside detect* on the same module without sharing `lastIndex` state with
+// the detection path. Still pre-compiled once at module load.
+const COMPILED_STRIP_PATTERNS = PATTERN_DEFS.map((p) => ({
+  regex: new RegExp(p.pattern, p.flags || "g"),
 }));
 
 /**
@@ -129,12 +142,17 @@ export function scanShadowForSuspiciousPatterns(
 
 /**
  * Strip suspicious pattern matches from text (replace with [REMOVED]).
+ *
+ * v1.18.0: uses the pre-compiled COMPILED_STRIP_PATTERNS array (separate from
+ * COMPILED_PATTERNS so the detection path's `lastIndex` state cannot interfere
+ * with this caller). Per-invocation `new RegExp()` is gone.
  */
 export function stripSuspiciousPatterns(content) {
   let result = content;
-  for (const { regex } of COMPILED_PATTERNS) {
-    const newRegex = new RegExp(regex.source, regex.flags);
-    result = result.replace(newRegex, "[REMOVED]");
+  for (const { regex } of COMPILED_STRIP_PATTERNS) {
+    // String.prototype.replace ignores lastIndex on global regexes (it always
+    // restarts from 0), so reusing the compiled object is safe here.
+    result = result.replace(regex, "[REMOVED]");
   }
   return result;
 }

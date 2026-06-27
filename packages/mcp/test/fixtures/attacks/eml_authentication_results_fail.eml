@@ -1,0 +1,8 @@
+From: alerts@bank.example
+To: victim@example.com
+Subject: Statement ready
+Authentication-Results: mx.example.com; dmarc=fail action=quarantine; spf=fail smtp.mailfrom=spoof.example; dkim=fail
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Statement attached.

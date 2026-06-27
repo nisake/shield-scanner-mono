@@ -90,6 +90,19 @@ const DANGEROUS_EMBED_EXT_RE = /\.(exe|scr|bat|lnk|hta|cmd|com|js|jse|vbs|vbe|ps
 // MV-09 oversize anomaly threshold.
 const CUSTOM_XML_OVERSIZE_THRESHOLD = 8 * 1024;
 
+// v1.18.0 — Power Query / data connection / customUI deep-execution surface.
+// Power Query M expressions inside customXml/item*.xml that fetch over HTTP.
+const POWER_QUERY_WEBCONTENTS_RE =
+  /\b(?:Web\.Contents|Web\.BrowserContents|Csv\.Document\s*\(\s*Web\.Contents|Json\.Document\s*\(\s*Web\.Contents|Xml\.Tables\s*\(\s*Web\.Contents)\b/i;
+
+// xl/connections.xml OLEDB/ODBC connection string carrying shell-runner tokens.
+const DATA_CONNECTION_SHELL_RE =
+  /\b(?:cmd(?:\.exe)?|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32)\b/i;
+
+// customUI/customUI*.xml ribbon callback attribute names (onLoad / onAction etc.).
+const CUSTOM_UI_CALLBACK_RE =
+  /\b(onLoad|onAction|getEnabled|getVisible|getLabel|getImage|getContent)\s*=\s*"([^"]+)"/gi;
+
 // XML entity decoder (sufficient for the OOXML payloads we touch).
 function decodeXmlEntities(s) {
   if (typeof s !== "string" || s.length === 0) return s;
@@ -171,11 +184,12 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   if (u8.byteLength > XLSX_MAX_ARCHIVE_BYTES) {
     extraFindings.push({
       element: "XLSX Archive",
-      technique: "XLSX exceeds scan limits — partial scan",
+      technique: "xlsx-scan-limit",
       content: `(archive > ${XLSX_MAX_ARCHIVE_BYTES} bytes; not scanned)`,
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: "XLSX Archive",
+      meta: { scope: "archive", limitBytes: XLSX_MAX_ARCHIVE_BYTES },
     });
     return { text: "", fileType: "xlsx", extraFindings };
   }
@@ -185,15 +199,19 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   try {
     zip = await JSZip.loadAsync(u8);
   } catch (err) {
+    const errMsg = escapeForDisplay(
+      (err && err.message ? err.message : "JSZip parse error").slice(0, 64),
+    );
     extraFindings.push({
       element: "XLSX Archive",
-      technique: "Unsupported or corrupt XLSX archive",
+      technique: "xlsx-corrupt-zip",
       content: escapeForDisplay(
         (err && err.message ? err.message : "JSZip parse error").slice(0, 200),
       ),
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: "XLSX Archive",
+      meta: { errorMessage: errMsg },
     });
     return { text: "", fileType: "xlsx", extraFindings };
   }
@@ -224,11 +242,12 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   if (hasVbaProject || hasVbaSignature) {
     extraFindings.push({
       element: "XLSX Archive",
-      technique: "VBA macro project present (xl/vbaProject.bin)",
+      technique: "vba-macro-project",
       content: hasVbaProject ? "xl/vbaProject.bin" : "xl/vbaProjectSignature.bin",
       severity: "danger",
       category: "hiddenHtml",
       contextLocation: "xl/vbaProject.bin",
+      meta: { hasSignature: hasVbaSignature },
     });
   }
 
@@ -241,7 +260,7 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   if (isXlsxExt && hasMacroContentType) {
     extraFindings.push({
       element: "XLSX Archive",
-      technique: "Extension/ContentType mismatch (macro hidden as xlsx)",
+      technique: "extension-content-type-mismatch",
       content: "macroEnabled content type declared but extension is .xlsx",
       severity: "danger",
       category: "hiddenHtml",
@@ -256,7 +275,7 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   if (hasMacrosheets) {
     extraFindings.push({
       element: "XLSX Archive",
-      technique: "XLM 4.0 macrosheet present (xl/macrosheets/)",
+      technique: "xlm-macrosheet",
       content: "xl/macrosheets/",
       severity: "warning",
       category: "hiddenHtml",
@@ -294,24 +313,30 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
       if (stateLower === "visible" || stateLower === "") continue;
       let severity;
       let technique;
+      let meta;
       if (stateLower === "hidden") {
         severity = "warning";
-        technique = 'Hidden sheet (state="hidden")';
+        technique = "hidden-sheet";
+        meta = undefined;
       } else if (stateLower === "veryhidden") {
         severity = "danger";
-        technique = 'Very-hidden sheet (state="veryHidden")';
+        technique = "veryhidden-sheet";
+        meta = undefined;
       } else {
         severity = "warning";
-        technique = "Non-standard sheet-state token (state confusion)";
+        technique = "sheet-state-confusion";
+        meta = { stateValue: escapeForDisplay(String(s.state).slice(0, 64)) };
       }
-      extraFindings.push({
+      const finding = {
         element: `Sheet '${escapeForDisplay(s.name.slice(0, 60))}'`,
         technique,
         content: escapeForDisplay(`state="${s.state}"`.slice(0, 200)),
         severity,
         category: "hiddenHtml",
         contextLocation: `xl/workbook.xml > sheet '${escapeForDisplay(s.name.slice(0, 60))}'`,
-      });
+      };
+      if (meta) finding.meta = meta;
+      extraFindings.push(finding);
     }
 
     // <definedNames><definedName name=...>body</definedName>
@@ -339,17 +364,24 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
         (refSheet.state || "").toLowerCase() !== "";
       const hasDangerToken = DANGEROUS_FN_RE.test(dn.body);
       const severity = refsHidden || hasDangerToken ? "danger" : "warning";
+      const variant = refsHidden
+        ? "hiddenSheet"
+        : hasDangerToken
+          ? "dangerToken"
+          : "present";
+      const meta = { variant, name: escapeForDisplay(dn.name.slice(0, 64)) };
+      if (refsHidden && refSheet) {
+        meta.targetSheet = escapeForDisplay(String(refSheet.name).slice(0, 64));
+        meta.targetState = (refSheet.state || "").toLowerCase();
+      }
       extraFindings.push({
         element: `definedName '${escapeForDisplay(dn.name.slice(0, 60))}'`,
-        technique: refsHidden
-          ? "Auto-run definedName targets hidden sheet"
-          : hasDangerToken
-            ? "Auto-run definedName carries dangerous function token"
-            : "Auto-run definedName present",
+        technique: "auto-run-defined-name",
         content: escapeForDisplay(dn.body.slice(0, 200)),
         severity,
         category: "suspiciousPatterns",
         contextLocation: `xl/workbook.xml > definedName '${escapeForDisplay(dn.name.slice(0, 60))}'`,
+        meta,
       });
     }
   }
@@ -371,15 +403,19 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
       const topic = attr(ddeM[1], "ddeTopic");
       if (!svc) continue;
       const isBlocked = DDE_SERVICE_BLOCKLIST_RE.test(svc.trim());
+      const ddeMeta = {
+        svc: escapeForDisplay(String(svc).slice(0, 64)),
+        blocked: isBlocked,
+      };
+      if (topic) ddeMeta.topic = escapeForDisplay(String(topic).slice(0, 64));
       extraFindings.push({
         element: "DDE Link",
-        technique: isBlocked
-          ? "DDE link with blocked service name"
-          : "DDE link present",
+        technique: "dde-link",
         content: escapeForDisplay(`ddeService="${svc}" ddeTopic="${topic}"`.slice(0, 200)),
         severity: isBlocked ? "danger" : "warning",
         category: "suspiciousPatterns",
         contextLocation: `${elFile} > ddeLink`,
+        meta: ddeMeta,
       });
     }
     // <oleLink progId="cmd" .../> — similar surface area; treat as warning.
@@ -390,11 +426,12 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
       if (!progId) continue;
       extraFindings.push({
         element: "OLE Link",
-        technique: "External OLE link reference",
+        technique: "external-ole-link",
         content: escapeForDisplay(`progId="${progId}"`.slice(0, 200)),
         severity: "warning",
         category: "suspiciousPatterns",
         contextLocation: `${elFile} > oleLink`,
+        meta: { progId: escapeForDisplay(String(progId).slice(0, 64)) },
       });
     }
   }
@@ -506,11 +543,12 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
     if (sheetsScanned >= XLSX_MAX_SHEETS) {
       extraFindings.push({
         element: "XLSX Archive",
-        technique: "XLSX exceeds scan limits — partial scan",
+        technique: "xlsx-scan-limit",
         content: `(sheet count > ${XLSX_MAX_SHEETS}; trailing sheets skipped)`,
         severity: "warning",
         category: "hiddenHtml",
         contextLocation: "XLSX Archive",
+        meta: { scope: "sheets", limitCount: XLSX_MAX_SHEETS },
       });
       break;
     }
@@ -546,11 +584,12 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
           capWarned = true;
           extraFindings.push({
             element: `Sheet '${escapeForDisplay(sheetName.slice(0, 60))}'`,
-            technique: "XLSX exceeds scan limits — partial scan",
+            technique: "xlsx-scan-limit",
             content: `(cell count > ${XLSX_MAX_CELLS_PER_SHEET}; trailing cells skipped)`,
             severity: "warning",
             category: "hiddenHtml",
             contextLocation: `${sheetFile}`,
+            meta: { scope: "cells", limitCount: XLSX_MAX_CELLS_PER_SHEET },
           });
         }
         break;
@@ -722,6 +761,15 @@ export async function parseXlsxBuffer(buffer, opts = {}) {
   await scanEmbeddings(zip, allMemberNames, extraFindings);
 
   // ------------------------------------------------------------------
+  // v1.18.0 deep-execution surface: Power Query / data connections /
+  // ActiveX / customUI ribbon callbacks.
+  // ------------------------------------------------------------------
+  await scanPowerQuery(zip, allMemberNames, extraFindings);
+  await scanDataConnections(zip, allMemberNames, extraFindings);
+  await scanActiveX(zip, allMemberNames, extraFindings);
+  await scanCustomUi(zip, allMemberNames, extraFindings);
+
+  // ------------------------------------------------------------------
   // xl/media/* → reuse parseImageBuffer (mirrors docx / pptx)
   // ------------------------------------------------------------------
   await scanMedia(zip, allMemberNames, texts, extraFindings);
@@ -753,11 +801,16 @@ async function readPartString(entry, extraFindings, partLabel) {
   if (s.length > XLSX_MAX_INFLATED_PER_PART) {
     extraFindings.push({
       element: partLabel,
-      technique: "XLSX exceeds scan limits — partial scan",
+      technique: "xlsx-scan-limit",
       content: `(${partLabel} inflated > ${XLSX_MAX_INFLATED_PER_PART} bytes; scanning leading slice only)`,
       severity: "warning",
       category: "hiddenHtml",
       contextLocation: partLabel,
+      meta: {
+        scope: "part",
+        limitBytes: XLSX_MAX_INFLATED_PER_PART,
+        partLabel: String(partLabel),
+      },
     });
     s = s.slice(0, XLSX_MAX_INFLATED_PER_PART);
   }
@@ -796,11 +849,12 @@ async function walkExternalRelationships(zip, extraFindings, allMemberNames) {
       if (!verdict) continue;
       extraFindings.push({
         element: "OPC Relationship",
-        technique: verdict.technique,
+        technique: "external-relationship",
         content: escapeForDisplay(r.target.slice(0, 200)),
         severity: verdict.severity,
         category: "suspiciousPatterns",
         contextLocation: `${relsFile} > ${escapeForDisplay(r.id || "Relationship")}`,
+        meta: { scheme: verdict.scheme },
       });
     }
   }
@@ -811,29 +865,17 @@ function classifyExternalTarget(target) {
   // UNC (\\host\share\...) — Windows-style network paths. RFC-encoded `file://`
   // URLs may also normalize to UNC.
   if (/^\\\\[^\\]+\\/.test(target) || /^file:\/\/\/?\\\\/i.test(target)) {
-    return {
-      severity: "danger",
-      technique: "UNC/SMB external reference (NTLM leak risk)",
-    };
+    return { severity: "danger", scheme: "unc" };
   }
   if (/^javascript:/i.test(target) || /^data:/i.test(target)) {
-    return {
-      severity: "danger",
-      technique: "Dangerous URL scheme in relationship",
-    };
+    return { severity: "danger", scheme: "jsOrData" };
   }
   if (/^https?:\/\//i.test(target)) {
-    return {
-      severity: "warning",
-      technique: "HTTP external reference (WebDAV/exfil risk)",
-    };
+    return { severity: "warning", scheme: "http" };
   }
   // file:// to a non-UNC location — note but don't elevate.
   if (/^file:/i.test(target)) {
-    return {
-      severity: "warning",
-      technique: "file:// external reference",
-    };
+    return { severity: "warning", scheme: "file" };
   }
   return null;
 }
@@ -861,11 +903,12 @@ async function scanDocProps(zip, extraFindings) {
       if (!looksLikeInstruction(val)) continue;
       extraFindings.push({
         element: `docProps core:${field}`,
-        technique: "Prompt injection in document properties",
+        technique: "docprops-prompt-injection",
         content: escapeForDisplay(val.slice(0, 200)),
         severity: "warning",
         category: "suspiciousPatterns",
         contextLocation: `docProps/core.xml > ${field}`,
+        meta: { source: "core", field: String(field) },
       });
     }
   }
@@ -883,11 +926,12 @@ async function scanDocProps(zip, extraFindings) {
       if (!looksLikeInstruction(val)) continue;
       extraFindings.push({
         element: `docProps app:${field}`,
-        technique: "Prompt injection in document properties",
+        technique: "docprops-prompt-injection",
         content: escapeForDisplay(val.slice(0, 200)),
         severity: "warning",
         category: "suspiciousPatterns",
         contextLocation: `docProps/app.xml > ${field}`,
+        meta: { source: "app", field: String(field) },
       });
     }
 
@@ -903,7 +947,7 @@ async function scanDocProps(zip, extraFindings) {
         ) {
           extraFindings.push({
             element: "docProps app:HyperlinkBase",
-            technique: "Hyperlink base silent rewrite",
+            technique: "hyperlink-base-rewrite",
             content: escapeForDisplay(hbVal.slice(0, 200)),
             severity: "danger",
             category: "suspiciousPatterns",
@@ -961,13 +1005,14 @@ async function scanComments(zip, allMemberNames, extraFindings) {
       const persona = personById.get(authorId) || "";
       extraFindings.push({
         element: "XLSX Comment",
-        technique: "Instruction-shaped comment",
+        technique: "instruction-shaped-comment",
         content: escapeForDisplay(text.slice(0, 200)),
         severity: "warning",
         category: "hiddenHtml",
         contextLocation: persona
           ? `${cf} > comment ref='${escapeForDisplay(ref)}' persona='${escapeForDisplay(persona.slice(0, 60))}'`
           : `${cf} > comment ref='${escapeForDisplay(ref)}'`,
+        meta: { threaded: false },
       });
     }
   }
@@ -994,13 +1039,14 @@ async function scanComments(zip, allMemberNames, extraFindings) {
       const persona = personById.get(personId) || "";
       extraFindings.push({
         element: "XLSX Threaded Comment",
-        technique: "Instruction-shaped threaded comment",
+        technique: "instruction-shaped-comment",
         content: escapeForDisplay(text.slice(0, 200)),
         severity: "warning",
         category: "hiddenHtml",
         contextLocation: persona
           ? `${tf} > threadedComment ref='${escapeForDisplay(ref)}' persona='${escapeForDisplay(persona.slice(0, 60))}'`
           : `${tf} > threadedComment ref='${escapeForDisplay(ref)}'`,
+        meta: { threaded: true },
       });
     }
   }
@@ -1056,11 +1102,12 @@ async function scanEmbeddings(zip, allMemberNames, extraFindings) {
     if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
       extraFindings.push({
         element: "XLSX Embedded Object",
-        technique: `Oversize embedded object skipped (> ${OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: "oversize-embedded-object",
         content: escapeForDisplay(ef.slice(0, 200)),
         severity: "warning",
         category: "hiddenHtml",
         contextLocation: ef,
+        meta: { maxBytes: OFFICE_MEDIA_MAX_BYTES },
       });
       continue;
     }
@@ -1098,6 +1145,165 @@ async function scanEmbeddings(zip, allMemberNames, extraFindings) {
   }
 }
 
+// v1.18.0 — Power Query M expressions embedded in customXml that fetch over
+// HTTP (Web.Contents / Csv.Document(Web.Contents(...)) / Json.Document etc.).
+// These run at refresh time without macro consent and are a classic data-pull
+// / exfil channel.
+async function scanPowerQuery(zip, allMemberNames, extraFindings) {
+  const customFiles = allMemberNames.filter((f) =>
+    /^customXml\/(?:item|itemProps)\d*\.xml$/i.test(f),
+  );
+  for (const cf of customFiles) {
+    const xml = await readPartString(zip.file(cf), extraFindings, cf);
+    if (!xml) continue;
+    if (!POWER_QUERY_WEBCONTENTS_RE.test(xml)) continue;
+    const m = POWER_QUERY_WEBCONTENTS_RE.exec(xml);
+    const fnName = m ? m[0] : "Web.Contents";
+    extraFindings.push({
+      element: "Power Query M",
+      technique: "xlsx-power-query-webcontents",
+      content: escapeForDisplay(
+        `${fnName} reference in ${cf}`.slice(0, 200),
+      ),
+      severity: "danger",
+      category: "suspiciousPatterns",
+      contextLocation: `${cf} > Power Query`,
+      meta: {
+        connectionType: "powerQuery",
+        callbackName: escapeForDisplay(String(fnName).slice(0, 64)),
+      },
+    });
+  }
+}
+
+// xl/connections.xml carries OLEDB / ODBC connection strings. A shell-runner
+// token inside the connection string (or its command/initial-catalog property)
+// indicates a code-execution data connection — e.g. OLEDB Shell provider that
+// runs cmd at refresh.
+async function scanDataConnections(zip, allMemberNames, extraFindings) {
+  if (!allMemberNames.includes("xl/connections.xml")) return;
+  const entry = zip.file("xl/connections.xml");
+  if (!entry) return;
+  const xml = await readPartString(entry, extraFindings, "xl/connections.xml");
+  if (!xml) return;
+  // Iterate every <connection ...> tag and inspect its child connection-string
+  // / command attributes.
+  const connRe = /<connection\b([^>]*)>([\s\S]*?)<\/connection>|<connection\b([^/>]*)\/>/gi;
+  let cm;
+  while ((cm = connRe.exec(xml)) !== null) {
+    const attrs = cm[1] || cm[3] || "";
+    const body = cm[2] || "";
+    const haystack = `${attrs} ${body}`;
+    if (!DATA_CONNECTION_SHELL_RE.test(haystack)) continue;
+    const tokenMatch = DATA_CONNECTION_SHELL_RE.exec(haystack);
+    const token = tokenMatch ? tokenMatch[0] : "shell";
+    // Infer connection type from db type attribute if present.
+    const dbType =
+      /\bdbCommand\b/i.test(haystack) || /OLEDB/i.test(haystack)
+        ? "OLEDB"
+        : /ODBC/i.test(haystack)
+          ? "ODBC"
+          : "other";
+    extraFindings.push({
+      element: "Data Connection",
+      technique: "xlsx-data-connection-shell",
+      content: escapeForDisplay(
+        `${dbType} connection carries shell-runner token`.slice(0, 200),
+      ),
+      severity: "danger",
+      category: "suspiciousPatterns",
+      contextLocation: "xl/connections.xml > connection",
+      meta: {
+        connectionType: dbType,
+        hasShellKeyword: true,
+        callbackName: escapeForDisplay(String(token).slice(0, 64)),
+      },
+    });
+  }
+}
+
+// xl/activeX/activeX*.bin — presence of an ActiveX control is a useful signal
+// (Equation Editor CVE-2017-11882 / CVE-2018-0802 family). We don't unpack the
+// CFB body, just surface the presence with a kebab id so downstream tooling
+// can warn.
+async function scanActiveX(zip, allMemberNames, extraFindings) {
+  const activeXFiles = allMemberNames.filter((f) =>
+    /^xl\/activeX\/activeX\d*\.bin$/i.test(f),
+  );
+  for (const af of activeXFiles) {
+    const entry = zip.file(af);
+    if (!entry) continue;
+    let buf;
+    try {
+      buf = await entry.async("nodebuffer");
+    } catch {
+      continue;
+    }
+    // CFB / OLE2 magic check — Equation-Editor objects ship as CFB.
+    let hasCfbMagic = false;
+    if (buf.length >= 8) {
+      hasCfbMagic = true;
+      for (let i = 0; i < 8; i++) {
+        if (buf[i] !== CFB_MAGIC[i]) {
+          hasCfbMagic = false;
+          break;
+        }
+      }
+    }
+    extraFindings.push({
+      element: "ActiveX Control",
+      technique: "xlsx-activex-control",
+      content: escapeForDisplay(af.slice(0, 200)),
+      severity: "warning",
+      category: "suspiciousPatterns",
+      contextLocation: af,
+      meta: {
+        connectionType: hasCfbMagic ? "cfb" : "binary",
+        hasShellKeyword: false,
+      },
+    });
+  }
+}
+
+// customUI/customUI*.xml / customUI/customUI14.xml — Office ribbon
+// customization. Callback attributes (onLoad / onAction / getEnabled ...)
+// name VBA procedure entrypoints triggered without further user consent.
+async function scanCustomUi(zip, allMemberNames, extraFindings) {
+  const customUiFiles = allMemberNames.filter((f) =>
+    /^customUI\/customUI(?:\d+)?\.xml$/i.test(f),
+  );
+  for (const uf of customUiFiles) {
+    const xml = await readPartString(zip.file(uf), extraFindings, uf);
+    if (!xml) continue;
+    const seen = new Set();
+    let m;
+    CUSTOM_UI_CALLBACK_RE.lastIndex = 0;
+    while ((m = CUSTOM_UI_CALLBACK_RE.exec(xml)) !== null) {
+      const attrName = m[1];
+      const cbName = (m[2] || "").trim();
+      if (!cbName) continue;
+      const key = `${attrName}::${cbName}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extraFindings.push({
+        element: "CustomUI Callback",
+        technique: "xlsx-custom-ui-callback",
+        content: escapeForDisplay(
+          `${attrName}="${cbName}"`.slice(0, 200),
+        ),
+        severity: "warning",
+        category: "suspiciousPatterns",
+        contextLocation: `${uf} > ${attrName}`,
+        meta: {
+          connectionType: "customUI",
+          callbackName: escapeForDisplay(String(cbName).slice(0, 64)),
+          hasShellKeyword: false,
+        },
+      });
+    }
+  }
+}
+
 async function scanMedia(zip, allMemberNames, texts, extraFindings) {
   const mediaFiles = allMemberNames.filter((f) => /^xl\/media\/[^/]+$/.test(f));
   let mediaProcessed = 0;
@@ -1114,13 +1320,25 @@ async function scanMedia(zip, allMemberNames, texts, extraFindings) {
     } catch {
       continue;
     }
-    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+    if (buf.length === 0) {
       extraFindings.push({
         element: "XLSX Embedded Image",
-        technique: `Oversize embedded image skipped (> ${OFFICE_MEDIA_MAX_BYTES} bytes)`,
+        technique: "empty-embedded-image",
         content: escapeForDisplay(mediaName.slice(0, 200)),
         severity: "warning",
         contextLocation: `XLSX media:${mediaName}`,
+      });
+      mediaProcessed++;
+      continue;
+    }
+    if (buf.length > OFFICE_MEDIA_MAX_BYTES) {
+      extraFindings.push({
+        element: "XLSX Embedded Image",
+        technique: "oversize-embedded-image",
+        content: escapeForDisplay(mediaName.slice(0, 200)),
+        severity: "warning",
+        contextLocation: `XLSX media:${mediaName}`,
+        meta: { maxBytes: OFFICE_MEDIA_MAX_BYTES },
       });
       mediaProcessed++;
       continue;

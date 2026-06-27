@@ -1,0 +1,1 @@
+Try clicking: https://example.com/api?cmd=login️&token=abc️def

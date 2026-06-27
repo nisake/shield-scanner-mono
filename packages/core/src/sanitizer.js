@@ -7,6 +7,36 @@
  *   3. Strip control chars
  *   4. Strip hidden HTML elements (if HTML)
  *   5. Redact suspicious patterns
+ *
+ * v1.19.0 C1 — Granular sanitize modes
+ *   options.mode: "strip" (default, legacy) | "mask" | "placeholder"
+ *     - "strip"       : remove invisible / control chars outright (legacy)
+ *     - "mask"        : replace invisible / control chars with a VISIBLE
+ *                       symbol so an auditor can see where the threat sat
+ *                       (e.g. NULL → "␀" ␀, TAB → "␉" ␉, ZWSP → "[ZWSP]")
+ *     - "placeholder" : replace with a category-tagged label such as
+ *                       "[REDACTED:invisibleUnicode]" — the placeholder NEVER
+ *                       carries raw user text (R12 compliant)
+ *
+ * In addition to `cleaned` + `removedCounts`, sanitize() now returns a
+ * `meta.maskedRanges` sibling key — an array of
+ *   [start, end, category, replacementLength]
+ * tuples describing each rewrite.
+ *
+ * Positional semantics:
+ *   - invisibleUnicode / controlChars / homoglyphs : start/end refer to the
+ *     ORIGINAL input position of the rewritten span (these passes do a 1:1
+ *     codepoint walk so the offsets are stable).
+ *   - suspiciousPatterns / hiddenHtml : start/end refer to the position of
+ *     the `[REMOVED]` / `[REMOVED: hidden element]` marker in the CLEANED
+ *     output (these passes use regex replacement so original offsets aren't
+ *     tracked through prior transforms). The replacementLength is the marker
+ *     width in those cases.
+ *
+ * R13 byCategory routing is preserved exactly; maskedRanges is a sibling,
+ * NOT a new byCategory bucket. R12: no raw user text in any maskedRanges
+ * entry — only positions, category name (one of the 5 R13 buckets), and
+ * the replacement label length.
  */
 
 import { stripInvisibleUnicode } from "./invisible-unicode.js";
@@ -20,6 +50,53 @@ import {
   normalizeXlfn,
 } from "./opc-helpers.js";
 
+const SUPPORTED_MODES = new Set(["strip", "mask", "placeholder"]);
+
+// Mask-mode visible symbols for invisible / control characters.
+//   * C0 controls   → Unicode Control Pictures block (U+2400 - U+241F)
+//   * DEL (0x7F)    → U+2421 (SYMBOL FOR DELETE)
+//   * C1 controls   → "[C1:U+00xx]" (no Control-Pictures glyph exists)
+//   * Tags Block    → "[TAG:U+E0xxx]"
+//   * Known invisible (zero-width, bidi, etc) → "[<short-name>]"
+//
+// These symbols are themselves printable, so a mask-mode result is visually
+// "what was there", not a stripped result. R12: the symbol carries the
+// codepoint label only — never raw user text from the surrounding span.
+const INVISIBLE_MASK_LABELS = new Map([
+  [0x00ad, "[SHY]"],     // soft hyphen
+  [0x200b, "[ZWSP]"],    // zero-width space
+  [0x200c, "[ZWNJ]"],    // zero-width non-joiner
+  [0x200d, "[ZWJ]"],     // zero-width joiner
+  [0x2060, "[WJ]"],      // word joiner
+  [0xfeff, "[BOM]"],     // byte-order mark
+  [0x180e, "[MVS]"],     // Mongolian vowel separator
+  [0x2028, "[LSEP]"],    // line separator
+  [0x2029, "[PSEP]"],    // paragraph separator
+  // Bidi
+  [0x202a, "[LRE]"],
+  [0x202b, "[RLE]"],
+  [0x202c, "[PDF]"],
+  [0x202d, "[LRO]"],
+  [0x202e, "[RLO]"],
+  [0x2066, "[LRI]"],
+  [0x2067, "[RLI]"],
+  [0x2068, "[FSI]"],
+  [0x2069, "[PDI]"],
+]);
+
+const PLACEHOLDER_LABELS = {
+  invisibleUnicode: "[REDACTED:invisibleUnicode]",
+  controlChars: "[REDACTED:controlChars]",
+  hiddenHtml: "[REDACTED:hiddenHtml]",
+  suspiciousPatterns: "[REDACTED:suspiciousPatterns]",
+  homoglyphs: "[REDACTED:homoglyphs]",
+};
+
+// Hidden-elements placeholder used by stripHiddenElements (legacy strip mode).
+// Mask / placeholder modes rewrite that marker to a category-tagged label so
+// the maskedRanges audit trail is consistent across modes.
+const HIDDEN_ELEM_LEGACY_MARKER = "<!-- [REMOVED: hidden element] -->";
+
 /**
  * Sanitize content by removing/redacting detected threats.
  *
@@ -27,13 +104,21 @@ import {
  * @param {Object} options
  * @param {string} [options.fileType] - "text" or "html"
  * @param {string[]} [options.categories] - Which categories to sanitize
- * @returns {{ cleaned: string, removedCounts: Object }}
+ * @param {string} [options.mode] - "strip" (default) | "mask" | "placeholder"
+ * @returns {{ cleaned: string, removedCounts: Object, meta: { maskedRanges: Array } }}
  */
 export function sanitize(content, options = {}) {
   const {
     fileType = "text",
     categories = ALL_CATEGORIES,
+    mode = "strip",
   } = options;
+
+  if (!SUPPORTED_MODES.has(mode)) {
+    throw new Error(
+      `sanitize: unsupported mode "${mode}" (expected one of strip / mask / placeholder)`
+    );
+  }
 
   const wanted = new Set(categories);
   const removedCounts = {
@@ -43,6 +128,7 @@ export function sanitize(content, options = {}) {
     suspiciousPatterns: 0,
     homoglyphs: 0,
   };
+  const maskedRanges = [];
 
   let result = content;
   let before;
@@ -51,18 +137,55 @@ export function sanitize(content, options = {}) {
     before = result;
     result = normalizeHomoglyphs(result);
     removedCounts.homoglyphs = countDiff(before, result);
+    // Homoglyph normalization is a 1:1 codepoint rewrite — every diff is a
+    // single-codepoint replacement at the same offset. Surface those as
+    // maskedRanges entries so the audit trail still describes the rewrite.
+    if (mode !== "strip" || true) {
+      // Always emit ranges (stable shape across modes).
+      const minLen = Math.min(before.length, result.length);
+      for (let i = 0; i < minLen; i++) {
+        if (before[i] !== result[i]) {
+          maskedRanges.push([i, i + 1, "homoglyphs", 1]);
+        }
+      }
+    }
   }
 
   if (wanted.has("invisibleUnicode")) {
     before = result;
-    result = stripInvisibleUnicode(result);
-    removedCounts.invisibleUnicode = before.length - result.length;
+    if (mode === "strip") {
+      result = stripInvisibleUnicode(result);
+      removedCounts.invisibleUnicode = before.length - result.length;
+      // Record ranges using the legacy strip behaviour: each invisible
+      // codepoint produces a [pos, pos+codeUnits, "invisibleUnicode", 0]
+      // tuple.
+      const inv = findInvisibleSpans(before);
+      for (const span of inv) {
+        maskedRanges.push([span.start, span.end, "invisibleUnicode", 0]);
+      }
+    } else {
+      const replaced = replaceInvisibleUnicode(before, mode);
+      result = replaced.text;
+      removedCounts.invisibleUnicode = replaced.count;
+      for (const r of replaced.ranges) maskedRanges.push(r);
+    }
   }
 
   if (wanted.has("controlChars")) {
     before = result;
-    result = stripControlChars(result);
-    removedCounts.controlChars = before.length - result.length;
+    if (mode === "strip") {
+      result = stripControlChars(result);
+      removedCounts.controlChars = before.length - result.length;
+      const ctrl = findControlSpans(before);
+      for (const span of ctrl) {
+        maskedRanges.push([span.start, span.end, "controlChars", 0]);
+      }
+    } else {
+      const replaced = replaceControlChars(before, mode);
+      result = replaced.text;
+      removedCounts.controlChars = replaced.count;
+      for (const r of replaced.ranges) maskedRanges.push(r);
+    }
   }
 
   if (wanted.has("hiddenHtml") && fileType === "html") {
@@ -72,6 +195,46 @@ export function sanitize(content, options = {}) {
     const replacements = (result.match(/\[REMOVED: hidden element\]/g) || [])
       .length;
     removedCounts.hiddenHtml = replacements;
+
+    if (mode !== "strip" && replacements > 0) {
+      // For mask / placeholder modes, rewrite the legacy hidden-element
+      // marker into a category-tagged label so the audit trail is
+      // consistent. R12: label contains category only.
+      const label =
+        mode === "placeholder"
+          ? PLACEHOLDER_LABELS.hiddenHtml
+          : "[MASKED:hiddenHtml]";
+      const rewritten = [];
+      let cursor = 0;
+      let idx;
+      while ((idx = result.indexOf(HIDDEN_ELEM_LEGACY_MARKER, cursor)) !== -1) {
+        rewritten.push(result.slice(cursor, idx));
+        rewritten.push(label);
+        maskedRanges.push([
+          idx,
+          idx + HIDDEN_ELEM_LEGACY_MARKER.length,
+          "hiddenHtml",
+          label.length,
+        ]);
+        cursor = idx + HIDDEN_ELEM_LEGACY_MARKER.length;
+      }
+      rewritten.push(result.slice(cursor));
+      result = rewritten.join("");
+    } else {
+      // strip mode: still emit maskedRanges entries pointing at the
+      // post-strip marker positions (replacementLength = marker length).
+      let cursor = 0;
+      let idx;
+      while ((idx = result.indexOf(HIDDEN_ELEM_LEGACY_MARKER, cursor)) !== -1) {
+        maskedRanges.push([
+          idx,
+          idx + HIDDEN_ELEM_LEGACY_MARKER.length,
+          "hiddenHtml",
+          HIDDEN_ELEM_LEGACY_MARKER.length,
+        ]);
+        cursor = idx + HIDDEN_ELEM_LEGACY_MARKER.length;
+      }
+    }
   }
 
   // S10: CSV / XLSX formula-injection neutralization.
@@ -97,14 +260,180 @@ export function sanitize(content, options = {}) {
   if (wanted.has("suspiciousPatterns")) {
     before = result;
     result = stripSuspiciousPatterns(result);
-    removedCounts.suspiciousPatterns += (result.match(/\[REMOVED\]/g) || [])
-      .length;
+    const matches = (result.match(/\[REMOVED\]/g) || []).length;
+    removedCounts.suspiciousPatterns += matches;
+
+    if (mode === "placeholder" && matches > 0) {
+      // Rewrite plain [REMOVED] markers to category-tagged placeholders.
+      const label = PLACEHOLDER_LABELS.suspiciousPatterns;
+      const rewritten = [];
+      let cursor = 0;
+      let idx;
+      while ((idx = result.indexOf("[REMOVED]", cursor)) !== -1) {
+        rewritten.push(result.slice(cursor, idx));
+        rewritten.push(label);
+        maskedRanges.push([
+          idx,
+          idx + "[REMOVED]".length,
+          "suspiciousPatterns",
+          label.length,
+        ]);
+        cursor = idx + "[REMOVED]".length;
+      }
+      rewritten.push(result.slice(cursor));
+      result = rewritten.join("");
+    } else {
+      // strip / mask modes: record each [REMOVED] marker position as a
+      // maskedRange so the audit trail is uniform.
+      let cursor = 0;
+      let idx;
+      while ((idx = result.indexOf("[REMOVED]", cursor)) !== -1) {
+        maskedRanges.push([
+          idx,
+          idx + "[REMOVED]".length,
+          "suspiciousPatterns",
+          "[REMOVED]".length,
+        ]);
+        cursor = idx + "[REMOVED]".length;
+      }
+    }
   }
 
   return {
     cleaned: result,
     removedCounts,
+    meta: { maskedRanges },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Invisible / control-char span helpers.
+// ---------------------------------------------------------------------------
+
+function isInvisibleCodePoint(cp) {
+  if (cp === undefined) return false;
+  // Unicode Tags Block
+  if (cp >= 0xe0000 && cp <= 0xe007f) return true;
+  // Known invisibles (the Map keys mirror the rules JSON loaded by
+  // invisible-unicode.js — listing the canonical set here keeps the mask-mode
+  // helper self-contained without re-importing the rules loader).
+  if (INVISIBLE_MASK_LABELS.has(cp)) return true;
+  return false;
+}
+
+function maskLabelForInvisible(cp) {
+  if (cp >= 0xe0000 && cp <= 0xe007f) {
+    const asciiEquiv = cp - 0xe0000;
+    const readable =
+      asciiEquiv >= 0x20 && asciiEquiv <= 0x7e
+        ? `"${String.fromCharCode(asciiEquiv)}"`
+        : `0x${asciiEquiv.toString(16)}`;
+    return `[TAG:${readable}]`;
+  }
+  if (INVISIBLE_MASK_LABELS.has(cp)) {
+    return INVISIBLE_MASK_LABELS.get(cp);
+  }
+  return `[U+${cp.toString(16).toUpperCase().padStart(4, "0")}]`;
+}
+
+/**
+ * Find the span (start, end) of every invisible codepoint stripped by the
+ * legacy stripInvisibleUnicode path. Used by strip-mode to populate
+ * maskedRanges with the original-document offsets.
+ */
+function findInvisibleSpans(text) {
+  const out = [];
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.codePointAt(i);
+    if (isInvisibleCodePoint(cp)) {
+      const width = cp > 0xffff ? 2 : 1;
+      out.push({ start: i, end: i + width });
+      if (cp > 0xffff) i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Walk content, replacing invisible codepoints with either a category-tagged
+ * placeholder or a per-codepoint visible label. Returns { text, count, ranges }
+ * where ranges are tuples indexed against the ORIGINAL `text` argument.
+ */
+function replaceInvisibleUnicode(text, mode) {
+  const out = [];
+  const ranges = [];
+  let count = 0;
+  let i = 0;
+  while (i < text.length) {
+    const cp = text.codePointAt(i);
+    const width = cp > 0xffff ? 2 : 1;
+    if (isInvisibleCodePoint(cp)) {
+      const label =
+        mode === "placeholder"
+          ? PLACEHOLDER_LABELS.invisibleUnicode
+          : maskLabelForInvisible(cp);
+      out.push(label);
+      ranges.push([i, i + width, "invisibleUnicode", label.length]);
+      count++;
+      i += width;
+      continue;
+    }
+    out.push(text.slice(i, i + width));
+    i += width;
+  }
+  return { text: out.join(""), count, ranges };
+}
+
+function isControlCodePoint(cp) {
+  if (cp === undefined) return false;
+  const isC0 = cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d;
+  const isC1 = cp >= 0x7f && cp <= 0x9f;
+  return isC0 || isC1;
+}
+
+function maskLabelForControl(cp) {
+  // C0 (0x00-0x1F minus tab/LF/CR) and DEL (0x7F) have a dedicated
+  // Control-Pictures glyph; C1 (0x80-0x9F) does not, so use a labelled form.
+  if (cp >= 0x00 && cp <= 0x1f) {
+    return String.fromCodePoint(0x2400 + cp);
+  }
+  if (cp === 0x7f) {
+    return "␡";
+  }
+  // C1 controls
+  return `[C1:U+${cp.toString(16).toUpperCase().padStart(4, "0")}]`;
+}
+
+function findControlSpans(text) {
+  const out = [];
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.charCodeAt(i);
+    if (isControlCodePoint(cp)) {
+      out.push({ start: i, end: i + 1 });
+    }
+  }
+  return out;
+}
+
+function replaceControlChars(text, mode) {
+  const out = [];
+  const ranges = [];
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.charCodeAt(i);
+    if (isControlCodePoint(cp)) {
+      const label =
+        mode === "placeholder"
+          ? PLACEHOLDER_LABELS.controlChars
+          : maskLabelForControl(cp);
+      out.push(label);
+      ranges.push([i, i + 1, "controlChars", label.length]);
+      count++;
+      continue;
+    }
+    out.push(text[i]);
+  }
+  return { text: out.join(""), count, ranges };
 }
 
 // ---------------------------------------------------------------------------

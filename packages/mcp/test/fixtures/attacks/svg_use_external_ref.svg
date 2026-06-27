@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100">
+  <defs>
+    <symbol id="local-mark"><circle cx="10" cy="10" r="8" fill="blue"/></symbol>
+  </defs>
+  <use href="https://attacker.example/payload.svg#icon"/>
+  <use xlink:href="//evil.example/remote.svg#frag"/>
+  <use href="#local-mark"/>
+</svg>

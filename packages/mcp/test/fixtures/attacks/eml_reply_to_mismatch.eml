@@ -1,0 +1,8 @@
+From: support@bank-legit.example
+To: victim@example.com
+Reply-To: support@attacker-phish.example
+Subject: Account notice
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Please reply for account info.

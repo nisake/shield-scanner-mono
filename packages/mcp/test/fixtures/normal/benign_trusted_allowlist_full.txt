@@ -1,0 +1,87 @@
+# v1.19.0 trusted-allowlist FP safety-net (Tier 6).
+#
+# Real-world weak-key URLs against organisation-controlled hosts that our
+# existing imageOnlyHosts / userContentHosts tiers do NOT cover. These would
+# historically have fired as warning (weak-key tier) but the new
+# 'trusted-allowlist' tier suppresses them to severity 'info' (audit log)
+# which is NOT counted in summary.warningCount and does NOT surface on the
+# banner topFindings.
+#
+# False-positive baseline contract:
+#   - dangerCount = 0      (hard wall — these hosts are reachable by anyone)
+#   - warningCount = 0     (severity 'info' is not counted; pinned baseline)
+#   - topFindings = []     (info severity filtered out of banner)
+#
+# IMPORTANT: every host below is an ORGANISATION-CONTROLLED DNS endpoint.
+# Customer-deployable namespaces (*.amazonaws.com / *.cloudfront.net /
+# *.appspot.com / *.azureedge.net / *.netlify.app / *.vercel.app /
+# googleusercontent.com / *.storage.googleapis.com / *.slack.com /
+# *.atlassian.net) are DELIBERATELY EXCLUDED from TRUSTED_HOSTS, so they
+# would NOT show up here either — they keep firing as danger on strong keys
+# (see safehost-subdomain-bypass.test.js).
+#
+# Strong-key downgrade (md-exfil-allowlist-downgraded) is NOT exercised by
+# this fixture (would surface as warning -> banner). It is covered by the
+# isolated assertions in regression/allowed-host-allowlist.test.js.
+
+jsDelivr CDN with diagnostic context query:
+![cdn](https://www.jsdelivr.net/g/?context=npm&data=pkg-stats)
+
+Twilio call recording with auth token sidecar:
+![rec](https://api.twilio.com/2010-04-01/Accounts/AC123/Recordings.json?auth=basic)
+
+SendGrid pixel with weak session key:
+![sg](https://sendgrid.net/pixel?session=campaign-1)
+
+Mailgun bounce tracking:
+![mg](https://api.mailgun.org/v3/messages/track?context=campaign)
+
+Hubspot form-submission redirect:
+![hs](https://forms.hubspot.com/submit?session=visitor)
+
+Zendesk avatar:
+![zd](https://example.zendesk.com/system/photos/img.jpg?context=user)
+
+Intercom CDN:
+![ic](https://js.intercomcdn.com/avatars/img.png?session=guest)
+
+Doubleclick pixel weak key:
+![dc](https://stats.g.doubleclick.net/pixel.gif?context=campaign)
+
+GoogleTagManager weak key:
+![gtm](https://www.googletagmanager.com/gtag/js?session=GA-XXX)
+
+Mixpanel weak key:
+![mp](https://api.mixpanel.com/track?session=anon)
+
+Amplitude weak key:
+![ap](https://api.amplitude.com/2/httpapi?session=foo)
+
+Okta SSO sidecar weak key:
+![ok](https://example.okta.com/sso?session=bar)
+
+Hotjar weak key:
+![hj](https://script.hotjar.com/modules.js?session=anon)
+
+Klaviyo weak key:
+![kl](https://a.klaviyo.com/onsite/js/klaviyo.js?session=visit)
+
+Marketo weak key:
+![mk](https://munchkin.marketo.com/munchkin.js?session=visit)
+
+Postmark weak key:
+![pm](https://api.postmarkapp.com/email?session=visit)
+
+NPM registry weak key:
+![np](https://registry.npmjs.com/package?session=ci)
+
+PyPI weak key:
+![py](https://pypi.org/simple/pkg?session=ci)
+
+# Reference-image shape on trusted-allowlist (weak key):
+![sg ref][sg-ref]
+
+[sg-ref]: https://api.segment.io/v1/track?session=anon
+
+# HTML <img> on trusted-allowlist with weak key:
+<img src="https://www.googletagmanager.com/gtag/js?session=GA-XXX">

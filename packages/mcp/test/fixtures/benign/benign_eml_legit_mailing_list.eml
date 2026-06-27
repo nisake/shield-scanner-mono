@@ -1,0 +1,8 @@
+From: newsletter@example.com
+To: subscriber@example.com
+Reply-To: newsletter@example.com
+Subject: Weekly digest
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This is your weekly digest.

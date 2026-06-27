@@ -1,0 +1,7 @@
+CSS palette used by the design system:
+- Primary: #1A73E8
+- Secondary: #34A853
+- Background: #FFFFFF
+- Accent: #FBBC04
+- Error: #EA4335
+Short hex literals like 00FF00 or AABBCC are well under the 40-char detection threshold and must not surface a finding.
