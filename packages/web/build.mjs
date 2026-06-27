@@ -13,7 +13,7 @@
 //     rules-loader)
 // =============================================================
 import { build } from 'esbuild';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 
@@ -124,3 +124,9 @@ writeFileSync(outPath, html, 'utf8');
 
 const sizeKB = (Buffer.byteLength(html, 'utf8') / 1024).toFixed(1);
 console.log(`[build] wrote ${outPath} (${sizeKB} KB)`);
+
+// 5. Copy static OG image alongside dist/index.html so a single dist/
+//    folder is self-contained when consumers host it (the og:image URL in
+//    the bundled HTML resolves to the same directory).
+copyFileSync(resolve(SRC, 'og-image.png'), resolve(DIST, 'og-image.png'));
+console.log(`[build] copied og-image.png to ${DIST}`);
