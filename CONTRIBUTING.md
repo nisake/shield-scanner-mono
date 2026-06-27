@@ -6,7 +6,7 @@ and the guardrails the repo enforces in CI.
 ## Quick start
 
 ```sh
-git clone https://github.com/your-github-handle/shield-scanner-mono.git
+git clone https://github.com/nisake/shield-scanner-mono.git
 cd shield-scanner-mono
 npm install
 npm run check          # tests + dist budget

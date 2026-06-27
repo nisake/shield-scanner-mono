@@ -1,10 +1,13 @@
 # Shield Scanner
 
-[![bench-detector](https://github.com/your-github-handle/shield-scanner-mono/actions/workflows/bench-detector.yml/badge.svg)](https://github.com/your-github-handle/shield-scanner-mono/actions/workflows/bench-detector.yml)
+[![bench-detector](https://github.com/nisake/shield-scanner-mono/actions/workflows/bench-detector.yml/badge.svg)](https://github.com/nisake/shield-scanner-mono/actions/workflows/bench-detector.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](#requirements)
 [![dist](https://img.shields.io/badge/web%20bundle-461.30%20KiB%20%2F%20900%20KiB%20cap-blue.svg)](#performance--budgets)
 [![tests](https://img.shields.io/badge/tests-1726%20passing-success.svg)](#tests)
+[![demo](https://img.shields.io/badge/demo-live-blue.svg)](https://nisake.github.io/shield-scanner/)
+
+> **Try the hosted Web demo:** **<https://nisake.github.io/shield-scanner/>** — runs entirely in your browser, no install required.
 
 Shield Scanner is a prompt-injection / hidden-instruction / obfuscated-payload scanner for the
 content you are about to feed into an LLM. It catches invisible Unicode, homoglyph host swaps,
@@ -134,7 +137,7 @@ A non-exhaustive snapshot of the rule families. The complete list lives in
 ## Install
 
 ```sh
-git clone https://github.com/your-github-handle/shield-scanner-mono.git
+git clone https://github.com/nisake/shield-scanner-mono.git
 cd shield-scanner-mono
 npm install
 ```
@@ -198,6 +201,8 @@ Restart Claude Desktop after editing the config.
 ---
 
 ## Build & run the Web app
+
+> **Just want to try it?** A hosted build is live at **<https://nisake.github.io/shield-scanner/>** — runs entirely in your browser, no install required. The steps below are only needed if you want to self-host or modify the bundle.
 
 The Web app is the same rule set, packaged into a single `index.html` you can upload to any
 static host (Netlify, Cloudflare Pages, S3 + CloudFront, GitHub Pages, …) or open from disk.
