@@ -5,14 +5,13 @@
  * MCP `parseImageBuffer(buf, ext)` and the Web `parseImage(buf, ext)` produce
  * byte-identical extracted text for the same input bytes, and produce the
  * same set of `contextLocation` values. This is the structural guarantee
- * (not just an assertion) that the hand-rolled Web mirror in index.html
- * hasn't drifted from the MCP reference implementation.
+ * (not just an assertion) that the Web parser mirror hasn't drifted from
+ * the MCP reference implementation.
  *
- * The Web harness lives at:
- *   C:\Users\Watashi\Desktop\shield-scanner\test-files\run_web_tests.mjs
- * It already extracts the analyze + helper region from index.html and
- * exports `parseImage`. We replicate that same extraction pattern here so
- * the test stays a single vitest file (no child_process / no harness exit).
+ * Since v1.6.0 the Web bundle (packages/web/src/app.js) imports parseImage
+ * from the canonical ES-module mirror at packages/web/src/parsers-web/image.js.
+ * We import the SAME module here so "Web parity" means "the exact function
+ * the Web bundle resolves at runtime", not a slice of any archived HTML.
  */
 
 import { describe, it, expect } from "vitest";
@@ -20,11 +19,6 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parseImageBuffer } from "../../server/parsers/image.js";
-// v1.6.0: Web no longer lives in a single hand-port index.html. The Web
-// bundle (packages/web/src/app.js) imports parseImage from the canonical
-// ES-module mirror at packages/web/src/parsers-web/image.js — we import
-// the SAME module here so "Web parity" means "the exact function the Web
-// bundle resolves", not "a slice of a stale archived HTML file".
 import { parseImage as webParseImage } from "../../../web/src/parsers-web/image.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
